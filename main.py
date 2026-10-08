@@ -12,6 +12,7 @@ import cv2
 import numpy as np
 import pygame
 
+from stage5_tasks import TaskBase, OilCatchTask, create_task_pool
 
 # ============================================================
 # THE GREEKS ARE BACK
@@ -433,15 +434,172 @@ class Player:
         return data
 
 
+class Stage5Controller:
+    """Per-player security-chain controller defined by the supplied specification."""
+
+    def __init__(self, app):
+        self.app = app
+        self.phase = "briefing"
+        self.tasks = []
+        self.current_task_index = 0
+        self.assigned_player = 0
+        self.phase_started = time.monotonic()
+        self.verify_score = 0.0
+
+    def start(self):
+        count = max(1, len(self.app.players))
+        self.tasks = create_task_pool(count)
+        self.current_task_index = 0
+        self.assigned_player = 0
+        self.phase = "briefing"
+        self.phase_started = time.monotonic()
+
+    @property
+    def current_player(self):
+        if not self.app.players:
+            return None
+        return self.app.players[min(self.assigned_player, len(self.app.players) - 1)]
+
+    @property
+    def current_task(self):
+        return self.tasks[self.current_task_index] if self.tasks else None
+
+    def begin_verification(self):
+        self.phase = "verify"
+        self.phase_started = time.monotonic()
+        self.verify_score = 0.0
+        self.app.webcam.read()
+
+    def accept_verification(self, score):
+        self.verify_score = score
+        self.phase = "task"
+        self.phase_started = time.monotonic()
+        if self.current_task:
+            self.current_task.reset()
+
+    def advance(self):
+        self.assigned_player += 1
+        self.current_task_index += 1
+        if self.assigned_player >= len(self.app.players):
+            self.app.stage_manager.goto(6)
+            return
+        self.begin_verification()
+
+    def update(self, dt):
+        if self.phase == "verify":
+            self.app.webcam.read()
+        elif self.phase == "task" and self.current_task:
+            if isinstance(self.current_task, OilCatchTask):
+                self.current_task.update_and_collide(dt, WIDTH, HEIGHT)
+            else:
+                self.current_task.update(dt)
+
+    def draw(self, surface):
+        t = self.app.background.time
+        self.app.background.draw(
+            surface,
+            danger=1.0 if self.phase == "verify" else 0.0,
+        )
+        player = self.current_player
+        task = self.current_task
+
+        if self.phase == "briefing":
+            draw_text(surface, "SECURITY CHAIN PROTOCOL", 17, (WIDTH / 2, 72),
+                      (255, 58, 78), align="center", mono=True, bold=True)
+            draw_text(surface, "שרשרת האבטחה הופעלה", 46, (WIDTH / 2, 130),
+                      (246, 248, 249), align="center", bold=True)
+            draw_text(surface,
+                      f"נרשמו {len(self.app.players)} לוחמים  •  לכל לוחם הוקצתה משימה אחת",
+                      20, (WIDTH / 2, 188), (160, 181, 185), align="center")
+            for i in range(min(10, len(self.app.players))):
+                rr = pygame.Rect(WIDTH / 2 - 350 + (i % 5) * 140,
+                                 300 + (i // 5) * 95, 125, 70)
+                rounded_panel(surface, rr, (5, 15, 20), (54, 207, 169), 14, 2)
+                draw_text(surface, f"{i+1:02d}", 12, (rr.centerx, rr.y + 16),
+                          (77, 255, 210), align="center", mono=True)
+                draw_text(surface, self.app.players[i].name, 15,
+                          (rr.centerx, rr.y + 44), (228, 239, 241),
+                          align="center", bold=True)
+            draw_text(surface, "המערכת מאתחלת מנעולים אישיים…", 14,
+                      (WIDTH / 2, HEIGHT - 110), (109, 143, 148),
+                      align="center", mono=True)
+            if time.monotonic() - self.phase_started > 2.6:
+                self.begin_verification()
+            return
+
+        if self.phase == "verify":
+            draw_text(surface, "BIOMETRIC LOCK // PLAYER VERIFICATION", 14,
+                      (WIDTH / 2, 72), (255, 57, 78), align="center", mono=True, bold=True)
+            draw_text(surface, "אימות פנים נדרש", 50, (WIDTH / 2, 128),
+                      (242, 247, 248), align="center", bold=True)
+            if player:
+                draw_text(surface, f"התייצב מול המצלמה:  {player.name}", 24,
+                          (WIDTH / 2, 185), (255, 204, 99),
+                          align="center", bold=True)
+
+            cam_rect = pygame.Rect(WIDTH * .19, 245, WIDTH * .62, 430)
+            rounded_panel(surface, cam_rect, (3, 10, 15, 245),
+                          (51, 242, 192), 24, 2)
+            frame = self.app.webcam.pygame_frame((cam_rect.w - 12, cam_rect.h - 12))
+            if frame:
+                surface.blit(frame, (cam_rect.x + 6, cam_rect.y + 6))
+            else:
+                draw_text(surface, "CAMERA SIGNAL LOST", 25, cam_rect.center,
+                          (255, 61, 80), align="center", mono=True, bold=True)
+
+            cx, cy = cam_rect.center
+            sweep = int((math.sin(t * 2.2) + 1) * cam_rect.w * .28)
+            pygame.draw.line(surface, (58, 255, 208),
+                             (cam_rect.left + 40 + sweep, cam_rect.top + 15),
+                             (cam_rect.left + 40 + sweep, cam_rect.bottom - 15), 2)
+            pygame.draw.circle(surface, (70, 255, 210), (cx, cy), 118, 2)
+            pygame.draw.circle(surface, (70, 255, 210), (cx, cy), 94, 1)
+            draw_text(surface, "SCANNING...", 12, (cam_rect.left + 20, cam_rect.top + 20),
+                      (65, 255, 203), mono=True, bold=True)
+            draw_text(surface, f"SIMILARITY  {self.verify_score:0.2f}",
+                      12, (cam_rect.right - 20, cam_rect.top + 20),
+                      (255, 63, 80), align="topright", mono=True)
+
+            draw_text(surface, "הזיהוי ימשיך רק כאשר השחקן הנכון מזוהה.",
+                      15, (WIDTH / 2, HEIGHT - 70), (126, 153, 158),
+                      align="center")
+            return
+
+        if self.phase == "task" and task:
+            draw_text(surface,
+                      f"PLAYER {self.assigned_player + 1:02d}  //  {player.name if player else 'UNKNOWN'}",
+                      13, (WIDTH / 2, 30), (255, 193, 78),
+                      align="center", mono=True, bold=True)
+            task.draw(surface, draw_text, rounded_panel, glow_circle, pygame, WIDTH, HEIGHT, t)
+
+    def handle(self, event):
+        if self.phase == "verify":
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN and self.current_player:
+                ref = self.current_player.load()
+                ok, score = self.app.webcam.verify_against(ref)
+                self.verify_score = score
+                if ok:
+                    self.accept_verification(score)
+            return
+
+        if self.phase == "task" and self.current_task:
+            result = self.current_task.handle(event, pygame, WIDTH, HEIGHT)
+            if result.completed or self.current_task.done:
+                self.advance()
+
+
 class StageManager:
     def __init__(self, app):
         self.app = app
         self.stage = 0
+        self.stage5 = Stage5Controller(app)
 
     def goto(self, stage):
         self.stage = stage
         self.app.stage_started_at = time.monotonic()
         self.app.stage_message = ""
+        if stage == 5:
+            self.stage5.start()
 
     def draw_stage_chip(self, surface):
         if self.stage <= 0:
@@ -645,6 +803,39 @@ class StageManager:
             draw_text(surface, f"רמז: חפשו {self.app.setup_clue_location}",
                       15, (WIDTH / 2, HEIGHT - 70), (255, 194, 70),
                       align="center", bold=True)
+
+    def draw_stage_6(self, surface):
+        # Source-defined dark-room protocol.
+        self.app.background.draw(surface)
+        self.draw_stage_chip(surface)
+        t = self.app.background.time
+        mx, my = pygame.mouse.get_pos()
+
+        dark = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        dark.fill((0, 0, 0, 246))
+        light_radius = 105 + int((math.sin(t * 3.1) + 1) * 8)
+        for r in range(light_radius, 12, -8):
+            alpha = int(205 * (1 - r / light_radius) ** 1.6)
+            pygame.draw.circle(dark, (0, 0, 0, alpha), (mx, my), r)
+        screen.blit(dark, (0, 0))
+
+        draw_text(surface, "DARK LIGHT PROTOCOL", 14, (WIDTH / 2, 55),
+                  (70, 255, 210), align="center", mono=True, bold=True)
+        draw_text(surface, "חושבים שאתם קרובים לנצח?", 29, (WIDTH / 2, 115),
+                  (235, 242, 244), align="center", bold=True)
+        draw_text(surface, "הפעם תצטרכו לכבות את האור בחדר.",
+                  20, (WIDTH / 2, 153), (255, 69, 85), align="center", bold=True)
+
+        secret = pygame.Rect(WIDTH * .72, HEIGHT * .67, 260, 76)
+        if secret.collidepoint(mx, my):
+            glow_circle(surface, secret.center, 30, (65, 255, 207), 18)
+            rounded_panel(surface, secret, (5, 17, 21), (65, 255, 207), 16, 3)
+            draw_text(surface, "עברנו הכל — ממשיכים", 18, secret.center,
+                      (232, 248, 245), align="center", bold=True)
+
+        draw_text(surface, "קוד פיזי לפי האפיון: 8421",
+                  14, (WIDTH / 2, HEIGHT - 52),
+                  (255, 196, 91), align="center", mono=True, bold=True)
 
     def draw_placeholder(self, surface):
         self.app.background.draw(surface)
@@ -864,6 +1055,19 @@ class EscapeRoomApp:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 self.running = False
 
+    def handle_stage6_event(self, event):
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                self.running = False
+            elif event.unicode.isdigit() and len(self.cipher_digits) < 4:
+                self.cipher_digits.append(event.unicode)
+                if len(self.cipher_digits) == 4:
+                    if "".join(self.cipher_digits) == "8421":
+                        self.stage_manager.goto(7)
+                    else:
+                        self.stage_message = "CODE REJECTED // 8421 REQUIRED"
+                        self.cipher_digits.clear()
+
     def handle_secret_keys(self, event):
         if event.type != pygame.KEYDOWN:
             return
@@ -873,13 +1077,15 @@ class EscapeRoomApp:
             if self.state == "game":
                 self.stage_manager.goto(min(12, self.stage_manager.stage + 1))
         # Emergency exit
-        if (mods & pygame.KMOD_CTRL) and (mods & pygame.KMOD_SHIFT) and event.key == pygame.K_ESCAPE:
+        if (mods & pygame.KMOD_CTRL) and (mods & pygame.KMOD_ALT) and (mods & pygame.KMOD_SHIFT) and event.key == pygame.K_ESCAPE:
             self.running = False
 
     def update(self, dt):
         self.background.update(dt)
         if self.state == "game" and self.stage_manager.stage == 2:
             self.webcam.read()
+        elif self.state == "game" and self.stage_manager.stage == 5:
+            self.stage_manager.stage5.update(dt)
 
     def draw(self):
         if self.state == "setup":
