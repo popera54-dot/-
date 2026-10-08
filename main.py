@@ -1124,6 +1124,8 @@ class EscapeRoomApp:
             self.handle_roster_event(event)
         elif self.stage_manager.stage == 3:
             self.handle_stage3_event(event)
+        elif self.stage_manager.stage == 4:
+            self.stage_manager.stage4.handle(event, pygame, WIDTH, HEIGHT)
         elif self.stage_manager.stage == 5:
             self.stage_manager.stage5.handle(event)
         elif self.stage_manager.stage == 6:
@@ -1149,14 +1151,14 @@ class EscapeRoomApp:
         self.background.update(dt)
         if self.state == "game" and self.stage_manager.stage == 2:
             self.webcam.read()
+        elif self.state == "game" and self.stage_manager.stage == 4:
+            self.stage_manager.stage4.update(dt)
         elif self.state == "game" and self.stage_manager.stage == 5:
             self.stage_manager.stage5.update(dt)
         elif self.state == "game" and self.stage_manager.stage == 6:
             self.stage_manager.stage6.update(dt)
         elif self.state == "game" and self.stage_manager.stage == 7:
             self.stage_manager.stage7.update(dt)
-        elif self.state == "game" and self.stage_manager.stage == 6:
-            self.stage_manager.stage6.update(dt)
 
     def draw(self):
         if self.state == "setup":
