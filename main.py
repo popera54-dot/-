@@ -939,6 +939,42 @@ class EscapeRoomApp:
         draw_text(surface, label, 11, (x + 18, y + 17), (74, 255, 211), mono=True, bold=True)
         draw_text(surface, value, 18, (x + 18, y + 53), (224, 237, 239), align="midleft")
 
+    def draw_puzzle_location_editor(self, surface):
+        panel = pygame.Rect(70, 480, 650, 178)
+        rounded_panel(surface, panel, (4, 12, 17, 245), (40, 86, 90), 18, 1)
+        draw_text(surface, "STAGE 04  //  PHYSICAL PUZZLE PIECE LOCATIONS", 11,
+                  (panel.x + 18, panel.y + 15), (74, 255, 211), mono=True, bold=True)
+        draw_text(surface, "הוסף כמה חלקים שצריך. לחץ על שורה וכתוב את מקום המחבוא.",
+                  13, (panel.x + 18, panel.y + 38), (152, 176, 179))
+        visible = 3
+        row_h = 36
+        max_start = max(0, len(self.setup_puzzle_locations) - visible)
+        self.setup_piece_scroll = clamp(self.setup_piece_scroll, 0, max_start)
+        for row in range(visible):
+            idx = row + self.setup_piece_scroll
+            if idx >= len(self.setup_puzzle_locations):
+                break
+            y = panel.y + 60 + row * row_h
+            rr = pygame.Rect(panel.x + 16, y, panel.w - 98, 29)
+            active = idx == self.setup_active_piece
+            rounded_panel(surface, rr, (7, 25, 30) if active else (5, 18, 23),
+                          (255, 194, 78) if active else (31, 72, 77), 8, 2 if active else 1)
+            draw_text(surface, f"חלק {idx + 1:02d}", 11, (rr.x + 10, rr.centery),
+                      (255, 194, 78), align="midleft", mono=True, bold=True)
+            value = self.setup_puzzle_locations[idx] or "לחץ כאן והקלד מיקום…"
+            preview = value if len(value) <= 57 else value[:54] + "..."
+            draw_text(surface, preview, 13, (rr.x + 85, rr.centery),
+                      (235, 243, 245) if self.setup_puzzle_locations[idx] else (93, 120, 124),
+                      align="midleft")
+            remove_rect = pygame.Rect(panel.right - 72, y, 52, 29)
+            rounded_panel(surface, remove_rect, (18, 13, 18), (255, 71, 92), 8, 1)
+            draw_text(surface, "×", 18, remove_rect.center, (255, 95, 112), align="center", bold=True)
+        if len(self.setup_puzzle_locations) > visible:
+            draw_text(surface, "גלגלת = גלילה בין החלקים", 9, (panel.x + 18, panel.bottom - 10),
+                      (92, 124, 129), mono=True, align="midbottom")
+        add_rect = pygame.Rect(panel.right - 92, panel.y + 12, 74, 29)
+        rounded_panel(surface, add_rect, (7, 29, 31), (55, 221, 180), 8, 1)
+        draw_text(surface, "+ חלק", 11, add_rect.center, (91, 255, 211), align="center", bold=True)
     def draw_global_hud(self, surface):
         if not self.game_started_at:
             return
