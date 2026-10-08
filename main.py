@@ -13,6 +13,7 @@ import numpy as np
 import pygame
 
 from stage5_tasks import TaskBase, OilCatchTask, create_task_pool
+from stage6_protocol import Stage6Controller
 
 # ============================================================
 # THE GREEKS ARE BACK
@@ -593,6 +594,7 @@ class StageManager:
         self.app = app
         self.stage = 0
         self.stage5 = Stage5Controller(app)
+        self.stage6 = Stage6Controller(app)
 
     def goto(self, stage):
         self.stage = stage
@@ -600,6 +602,8 @@ class StageManager:
         self.app.stage_message = ""
         if stage == 5:
             self.stage5.start()
+        elif stage == 6:
+            self.stage6.start()
 
     def draw_stage_chip(self, surface):
         if self.stage <= 0:
@@ -616,6 +620,13 @@ class StageManager:
             self.draw_stage_2(surface)
         elif self.stage == 3:
             self.draw_stage_3(surface)
+        elif self.stage == 4:
+            self.draw_stage_4(surface)
+        elif self.stage == 5:
+            self.stage5.draw(surface)
+        elif self.stage == 6:
+            self.stage6.draw(surface, draw_text, rounded_panel, glow_circle, pygame, WIDTH, HEIGHT,
+                              self.app.background.time)
         else:
             self.draw_placeholder(surface)
 
@@ -803,39 +814,6 @@ class StageManager:
             draw_text(surface, f"רמז: חפשו {self.app.setup_clue_location}",
                       15, (WIDTH / 2, HEIGHT - 70), (255, 194, 70),
                       align="center", bold=True)
-
-    def draw_stage_6(self, surface):
-        # Source-defined dark-room protocol.
-        self.app.background.draw(surface)
-        self.draw_stage_chip(surface)
-        t = self.app.background.time
-        mx, my = pygame.mouse.get_pos()
-
-        dark = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-        dark.fill((0, 0, 0, 246))
-        light_radius = 105 + int((math.sin(t * 3.1) + 1) * 8)
-        for r in range(light_radius, 12, -8):
-            alpha = int(205 * (1 - r / light_radius) ** 1.6)
-            pygame.draw.circle(dark, (0, 0, 0, alpha), (mx, my), r)
-        screen.blit(dark, (0, 0))
-
-        draw_text(surface, "DARK LIGHT PROTOCOL", 14, (WIDTH / 2, 55),
-                  (70, 255, 210), align="center", mono=True, bold=True)
-        draw_text(surface, "חושבים שאתם קרובים לנצח?", 29, (WIDTH / 2, 115),
-                  (235, 242, 244), align="center", bold=True)
-        draw_text(surface, "הפעם תצטרכו לכבות את האור בחדר.",
-                  20, (WIDTH / 2, 153), (255, 69, 85), align="center", bold=True)
-
-        secret = pygame.Rect(WIDTH * .72, HEIGHT * .67, 260, 76)
-        if secret.collidepoint(mx, my):
-            glow_circle(surface, secret.center, 30, (65, 255, 207), 18)
-            rounded_panel(surface, secret, (5, 17, 21), (65, 255, 207), 16, 3)
-            draw_text(surface, "עברנו הכל — ממשיכים", 18, secret.center,
-                      (232, 248, 245), align="center", bold=True)
-
-        draw_text(surface, "קוד פיזי לפי האפיון: 8421",
-                  14, (WIDTH / 2, HEIGHT - 52),
-                  (255, 196, 91), align="center", mono=True, bold=True)
 
     def draw_placeholder(self, surface):
         self.app.background.draw(surface)
@@ -1051,22 +1029,13 @@ class EscapeRoomApp:
             self.handle_roster_event(event)
         elif self.stage_manager.stage == 3:
             self.handle_stage3_event(event)
+        elif self.stage_manager.stage == 5:
+            self.stage_manager.stage5.handle(event)
+        elif self.stage_manager.stage == 6:
+            self.stage_manager.stage6.handle(event, pygame, WIDTH, HEIGHT)
         else:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 self.running = False
-
-    def handle_stage6_event(self, event):
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_ESCAPE:
-                self.running = False
-            elif event.unicode.isdigit() and len(self.cipher_digits) < 4:
-                self.cipher_digits.append(event.unicode)
-                if len(self.cipher_digits) == 4:
-                    if "".join(self.cipher_digits) == "8421":
-                        self.stage_manager.goto(7)
-                    else:
-                        self.stage_message = "CODE REJECTED // 8421 REQUIRED"
-                        self.cipher_digits.clear()
 
     def handle_secret_keys(self, event):
         if event.type != pygame.KEYDOWN:
@@ -1086,6 +1055,8 @@ class EscapeRoomApp:
             self.webcam.read()
         elif self.state == "game" and self.stage_manager.stage == 5:
             self.stage_manager.stage5.update(dt)
+        elif self.state == "game" and self.stage_manager.stage == 6:
+            self.stage_manager.stage6.update(dt)
 
     def draw(self):
         if self.state == "setup":
