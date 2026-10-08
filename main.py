@@ -14,6 +14,8 @@ import pygame
 
 from stage5_tasks import TaskBase, OilCatchTask, create_task_pool
 from stage6_protocol import Stage6Controller
+from stage7_server_cipher import Stage7Controller
+from stage6_protocol import Stage6Controller
 
 # ============================================================
 # THE GREEKS ARE BACK
@@ -595,6 +597,8 @@ class StageManager:
         self.stage = 0
         self.stage5 = Stage5Controller(app)
         self.stage6 = Stage6Controller(app)
+        self.stage7 = Stage7Controller(app)
+        self.stage6 = Stage6Controller(app)
 
     def goto(self, stage):
         self.stage = stage
@@ -602,6 +606,10 @@ class StageManager:
         self.app.stage_message = ""
         if stage == 5:
             self.stage5.start()
+        elif stage == 6:
+            self.stage6.start()
+        elif stage == 7:
+            self.stage7.start()
         elif stage == 6:
             self.stage6.start()
 
@@ -620,6 +628,12 @@ class StageManager:
             self.draw_stage_2(surface)
         elif self.stage == 3:
             self.draw_stage_3(surface)
+        elif self.stage == 5:
+            self.stage5.draw(surface)
+        elif self.stage == 6:
+            self.stage6.draw(surface, draw_text, rounded_panel, glow_circle, pygame, WIDTH, HEIGHT, self.app.background.time)
+        elif self.stage == 7:
+            self.stage7.draw(surface, draw_text, rounded_panel, glow_circle, pygame, WIDTH, HEIGHT, self.app.background.time)
         elif self.stage == 4:
             self.draw_stage_4(surface)
         elif self.stage == 5:
@@ -1033,10 +1047,11 @@ class EscapeRoomApp:
             self.stage_manager.stage5.handle(event)
         elif self.stage_manager.stage == 6:
             self.stage_manager.stage6.handle(event, pygame, WIDTH, HEIGHT)
+        elif self.stage_manager.stage == 7:
+            self.stage_manager.stage7.handle(event, pygame, WIDTH, HEIGHT)
         else:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 self.running = False
-
     def handle_secret_keys(self, event):
         if event.type != pygame.KEYDOWN:
             return
@@ -1055,6 +1070,10 @@ class EscapeRoomApp:
             self.webcam.read()
         elif self.state == "game" and self.stage_manager.stage == 5:
             self.stage_manager.stage5.update(dt)
+        elif self.state == "game" and self.stage_manager.stage == 6:
+            self.stage_manager.stage6.update(dt)
+        elif self.state == "game" and self.stage_manager.stage == 7:
+            self.stage_manager.stage7.update(dt)
         elif self.state == "game" and self.stage_manager.stage == 6:
             self.stage_manager.stage6.update(dt)
 
