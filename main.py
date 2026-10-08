@@ -993,12 +993,63 @@ class EscapeRoomApp:
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 self.running = False
-            elif event.key == pygame.K_RETURN:
-                self.start_game()
+                return
+            if event.key == pygame.K_BACKSPACE and self.setup_active_piece is not None:
+                self.setup_puzzle_locations[self.setup_active_piece] = self.setup_puzzle_locations[self.setup_active_piece][:-1]
+                return
+            if event.key == pygame.K_DELETE and self.setup_active_piece is not None:
+                self.setup_puzzle_locations.pop(self.setup_active_piece)
+                if not self.setup_puzzle_locations:
+                    self.setup_puzzle_locations = [""]
+                self.setup_active_piece = min(self.setup_active_piece, len(self.setup_puzzle_locations) - 1)
+                self.setup_piece_scroll = min(self.setup_piece_scroll, max(0, len(self.setup_puzzle_locations) - 3))
+                return
+            if event.key == pygame.K_RETURN:
+                self.stage_message = f"מיקום חלק {self.setup_active_piece + 1} נשמר."
+                return
+            if len(event.unicode) == 1 and event.unicode.isprintable() and self.setup_active_piece is not None:
+                current = self.setup_puzzle_locations[self.setup_active_piece]
+                if len(current) < 120:
+                    self.setup_puzzle_locations[self.setup_active_piece] = current + event.unicode
+                return
+
+        if event.type == pygame.MOUSEWHEEL:
+            panel = pygame.Rect(70, 480, 650, 178)
+            if panel.collidepoint(pygame.mouse.get_pos()):
+                max_start = max(0, len(self.setup_puzzle_locations) - 3)
+                self.setup_piece_scroll = max(0, min(max_start, self.setup_piece_scroll - event.y))
+            return
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            panel = pygame.Rect(70, 480, 650, 178)
+            add_rect = pygame.Rect(panel.right - 92, panel.y + 12, 74, 29)
+            if add_rect.collidepoint(event.pos):
+                self.setup_puzzle_locations.append("")
+                self.setup_active_piece = len(self.setup_puzzle_locations) - 1
+                self.setup_piece_scroll = max(0, len(self.setup_puzzle_locations) - 3)
+                return
+
+            for row in range(3):
+                idx = row + self.setup_piece_scroll
+                if idx >= len(self.setup_puzzle_locations):
+                    break
+                y = panel.y + 60 + row * 36
+                rr = pygame.Rect(panel.x + 16, y, panel.w - 98, 29)
+                remove_rect = pygame.Rect(panel.right - 72, y, 52, 29)
+                if remove_rect.collidepoint(event.pos):
+                    self.setup_puzzle_locations.pop(idx)
+                    if not self.setup_puzzle_locations:
+                        self.setup_puzzle_locations = [""]
+                    self.setup_active_piece = min(idx, len(self.setup_puzzle_locations) - 1)
+                    self.setup_piece_scroll = min(self.setup_piece_scroll, max(0, len(self.setup_puzzle_locations) - 3))
+                    return
+                if rr.collidepoint(event.pos):
+                    self.setup_active_piece = idx
+                    return
+
             if self.setup_buttons[0].rect.collidepoint(event.pos):
-                self.stage_message = "ההגדרות נשמרו."
+                count = len([x for x in self.setup_puzzle_locations if x.strip()])
+                self.stage_message = f"ההגדרות נשמרו • {count} מיקומי פאזל."
             elif self.setup_buttons[1].rect.collidepoint(event.pos):
                 self.start_game()
             elif self.setup_buttons[2].rect.collidepoint(event.pos):
