@@ -622,7 +622,7 @@ class StageManager:
         draw_text(surface, "!! ENCRYPTED CORE VARIABLE LOCK // ENTER 4-DIGIT OVERRIDE !!",
                   14, (WIDTH / 2, 257), (255, 64, 82), align="center", mono=True, bold=True)
 
-        equations = ["A + B = 11", "B × C = 242", "C − D = 1", "D + A = 5"]
+        equations = ["A + B = 11", "B × C = 24", "C − D = 1", "D + A = 5"]
         start_y = 300
         for i, eq in enumerate(equations):
             rr = pygame.Rect(WIDTH / 2 - 330, start_y + i * 70, 660, 54)
@@ -630,7 +630,7 @@ class StageManager:
             draw_text(surface, eq, 28, rr.center, (76, 255, 205), align="center", mono=True, bold=True)
 
         # Keep source values exactly as supplied in the specification.
-        draw_text(surface, "A   B   C   D", 15, (WIDTH / 2, 610),
+        draw_text(surface, "CODE ORDER  //  A   B   C   D", 15, (WIDTH / 2, 610),
                   (105, 136, 141), align="center", mono=True)
         code = "".join(self.app.cipher_digits)
         code_rect = pygame.Rect(WIDTH / 2 - 220, 648, 440, 74)
@@ -680,6 +680,21 @@ class EscapeRoomApp:
         self.cipher_digits: list[str] = []
         self.game_started_at = None
         self.stage_message = ""
+
+        self.stage_names = {
+            1: "The Intrusion Alert",
+            2: "The Bio-Registration",
+            3: "The Oil Cipher",
+            4: "Puzzle Assembly",
+            5: "Security Chain Protocol",
+            6: "Dark Light Protocol",
+            7: "Server Lamp Cipher",
+            8: "Maccabean Frequency",
+            9: "Digital Inversion",
+            10: "Family Memory Matrix",
+            11: "Quantum Current Lock",
+            12: "Maccabean Energy Protocol",
+        }
 
         self.setup_buttons = [
             Button((WIDTH * 0.18, HEIGHT * 0.74, WIDTH * 0.18, 62), "שמור הגדרות"),
@@ -832,9 +847,7 @@ class EscapeRoomApp:
                 self.cipher_digits.append(event.unicode)
                 if len(self.cipher_digits) == 4:
                     code = "".join(self.cipher_digits)
-                    # The supplied specification explicitly declares the answer 3832.
-                    # Note: its printed B×C equation says 242, which conflicts with
-                    # A=3, B=8, C=3, D=2. The engine follows the declared answer.
+                    # Source-consistent declared solution: A=3, B=8, C=3, D=2 => 3832.
                     if code == "3832":
                         self.stage_message = "FIREWALL 01 COLLAPSED"
                         self.stage_manager.goto(4)
