@@ -174,9 +174,23 @@ class SymbolMatrixTask(TaskBase):
 
     def __init__(self, rng=None):
         super().__init__(rng)
-        self.counts = {s: self.rng.randint(7, 15) for s in self.SYMBOLS}
-        self.target = max(self.counts, key=self.counts.get)
-        self.grid = [self.rng.choice(self.SYMBOLS) for _ in range(30)]
+        counts = sorted(
+            ((self.rng.randint(7, 12), s) for s in self.SYMBOLS),
+            key=lambda pair: pair[0],
+        )
+        # Guarantee one unique majority while keeping the puzzle random.
+        base_count, _ = counts[-1]
+        adjusted = {s: n for n, s in counts}
+        top_symbol = counts[-1][1]
+        adjusted[top_symbol] = min(17, base_count + 3)
+        self.counts = adjusted
+        self.target = top_symbol
+        self.grid = [
+            symbol
+            for symbol, count in self.counts.items()
+            for _ in range(count)
+        ]
+        self.rng.shuffle(self.grid)
 
     def handle(self, event, pygame, width, height):
         if event.type == pygame.KEYDOWN:
