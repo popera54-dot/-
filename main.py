@@ -152,13 +152,41 @@ class CinematicBackground:
 
         draw_grid(surface)
 
-        # Vertical data rain
-        for x in range(15, WIDTH, 70):
-            offset = int((self.time * (40 + (x % 37))) % 140)
-            for j in range(5):
-                yy = (j * 42 + offset) % HEIGHT
-                draw_text(surface, random.choice(["01", "0F", "7A", "HX", "MK"]),
-                          11, (x, yy), (34, 145, 118), mono=True, align="center")
+        # Dense hacker terminal data rain: green streams with intermittent red alerts.
+        glyphs = ["0", "1", "7", "X", "A", "F", "C", "E", "M", "K", ":", "/", "<", ">", "#", "$"]
+        for x in range(10, WIDTH, 28):
+            speed = 55 + (x * 17) % 125
+            offset = int((self.time * speed + x * 31) % (HEIGHT + 180))
+            length = 8 + ((x // 28) % 9)
+            for j in range(length):
+                yy = (offset - j * 22) % (HEIGHT + 40) - 20
+                intensity = clamp(160 - j * 15, 35, 160)
+                is_red = ((x // 28) % 17 == 0) and j < 4
+                col = (255, intensity // 3, intensity // 3) if is_red else (35, intensity, 88)
+                draw_text(surface, random.choice(glyphs), 13,
+                          (x, yy), col, mono=True, align="center")
+
+        # Wide terminal panels drifting behind gameplay.
+        for k in range(7):
+            y = 110 + k * 95
+            drift = int(math.sin(self.time * 0.7 + k) * 35)
+            draw_text(surface,
+                      random.choice([
+                          "ACCESSING SECURITY CORE...",
+                          "AUTH_CHANNEL::MKBS_2.0",
+                          "DECRYPT /████/████/████",
+                          "INTRUSION TRACE // 97%",
+                          "FIREWALL NODE // BREACHED",
+                          "ROOT SESSION // UNKNOWN",
+                          "WARNING // SYSTEM INTEGRITY",
+                      ]),
+                      12, (18 + drift, y), (43, 128, 99), mono=True)
+
+        # Red diagnostic rails, like a compromised military terminal.
+        for side in (0, WIDTH - 8):
+            pygame.draw.rect(surface, (145, 24, 40), (side, 0, 8, HEIGHT))
+        for y in (105, HEIGHT - 105):
+            pygame.draw.line(surface, (80, 21, 30), (0, y), (WIDTH, y), 2)
 
         for p in self.particles:
             p.draw(surface)
@@ -330,6 +358,15 @@ class StageManager:
                 draw_text(surface, "0x" + format((i * 917 + int(elapsed * 99)) % 65535, "04X"),
                           11, (x + 12, y + 33), (130, 32, 42), mono=True)
 
+        # Live hacker terminal status strip.
+        status_y = 112
+        draw_text(surface, ">> SECURE SHELL // ANTIOCHUS-2.0", 13,
+                  (34, status_y), (63, 255, 178), mono=True, bold=True)
+        draw_text(surface, f"TRACE:{int(elapsed * 73) % 9999:04d}  NODE:MK-{random.randint(10,99)}  SIGNAL:ACTIVE",
+                  12, (34, status_y + 24), (145, 54, 68), mono=True)
+        draw_text(surface, "01010111 01100001 01110010 01101110 01101001 01101110 01100111",
+                  11, (34, status_y + 48), (31, 125, 91), mono=True)
+
         # Hacker alert
         if elapsed >= 2.0:
             y = HEIGHT * 0.36
@@ -351,7 +388,7 @@ class StageManager:
                           (5, 12, 18, 235), (255, 52, 72), 18, 2)
             draw_text(surface, "ANTIOCHUS 2.0  //  ACTIVE SESSION", 14,
                       (WIDTH / 2, HEIGHT - 130), (255, 75, 90), align="center", mono=True, bold=True)
-            draw_text(surface, ""המחשב שלכם שייך לי כעת. השעון מתחיל... עכשיו."",
+            draw_text(surface, '"המחשב שלכם שייך לי כעת. השעון מתחיל... עכשיו."',
                       18, (WIDTH / 2, HEIGHT - 99), (235, 245, 247), align="center")
 
         if elapsed > 8.8:
@@ -454,6 +491,12 @@ class StageManager:
                   "אנטיוכוס 2.0 מחק את פך השמן הטהור. פצחו את ארבעת המשתנים.",
                   20, (WIDTH / 2, 182), (144, 168, 175), align="center")
 
+        rounded_panel(surface,
+                      pygame.Rect(WIDTH / 2 - 520, 228, 1040, 58),
+                      (4, 10, 14), (145, 30, 45), 12, 1)
+        draw_text(surface, "!! ENCRYPTED CORE VARIABLE LOCK // ENTER 4-DIGIT OVERRIDE !!",
+                  14, (WIDTH / 2, 257), (255, 64, 82), align="center", mono=True, bold=True)
+
         equations = ["A + B = 11", "B × C = 242", "C − D = 1", "D + A = 5"]
         start_y = 300
         for i, eq in enumerate(equations):
@@ -544,6 +587,10 @@ class EscapeRoomApp:
         draw_text(surface, "היוונים חוזרים", 62, (70, 105), (245, 249, 250), bold=True)
         draw_text(surface, "OPERATOR CONSOLE  /  PRE-GAME SETUP", 16, (74, 173),
                   (114, 145, 150), mono=True)
+        draw_text(surface, "ROOT ACCESS // LOCAL TERMINAL", 12, (WIDTH - 520, 55),
+                  (255, 58, 82), mono=True, bold=True)
+        draw_text(surface, ">>> SYSTEM WAITING FOR OPERATOR COMMAND", 11, (WIDTH - 520, 76),
+                  (41, 180, 126), mono=True)
 
         # Large hero composition
         art = pygame.Rect(WIDTH - 520, 80, 390, 470)
