@@ -298,7 +298,12 @@ class Stage4Controller:
         draw_text(surface, "מצאו בעיניים את המסלול היחיד שעובר דרך 3 הפריטים למעלה ומגיע ליציאה 15",
                   16, (width / 2, 153), (147, 170, 175), align="center")
 
-        target_panel = pygame.Rect(38, 174, int(width * .58), 84)
+        left_x = 30
+        left_w = int(width * .48)
+        right_x = int(width * .51)
+        right_w = int(width * .47)
+
+        target_panel = pygame.Rect(left_x, 174, left_w, 84)
         rounded_panel(surface, target_panel, (4, 13, 18, 245), (60, 100, 98), 20, 1)
         slot_w = target_panel.w / 3
         labels = ("סביבון", "כד שמן", "חנוכייה")
@@ -312,14 +317,14 @@ class Stage4Controller:
             draw_text(surface, f"TARGET // 0{i + 1}", 9, (slot.x + 58, slot.centery + 12),
                       (91, 255, 210), align="midleft", mono=True)
 
-        maze_panel = pygame.Rect(38, 272, int(width * .58), height - 334)
+        maze_panel = pygame.Rect(left_x, 272, left_w, height - 334)
         rounded_panel(surface, maze_panel, (3, 11, 15, 245), (43, 100, 100), 22, 2)
         self._draw_maze(surface, maze_panel, pygame, t, draw_text)
 
-        right_panel = pygame.Rect(int(width * .60), 174, int(width * .36), height - 236)
+        right_panel = pygame.Rect(right_x, 174, right_w, height - 236)
         self._draw_location_board(surface, right_panel, pygame, draw_text, rounded_panel)
 
-        self.complete_button = pygame.Rect(int(width * .60), height - 52, int(width * .36), 40)
+        self.complete_button = pygame.Rect(right_x, height - 52, right_w, 40)
         hovered = self.complete_button.collidepoint(pygame.mouse.get_pos())
         rounded_panel(surface, self.complete_button,
                       (14, 27, 31) if not hovered else (16, 40, 43),
@@ -329,12 +334,12 @@ class Stage4Controller:
                   (255, 223, 133), align="center", bold=True)
 
         draw_text(surface, "EYES ONLY  •  המסלול אינו מסומן  •  הפתרון מתבצע בחדר",
-                  10, (int(width * .60), height - 12),
+                  10, (right_x, height - 12),
                   (89, 120, 125), mono=True)
 
     def handle(self, event, pygame, width, height):
         if event.type == pygame.MOUSEWHEEL:
-            right_panel = pygame.Rect(int(width * .60), 174, int(width * .36), height - 236)
+            right_panel = pygame.Rect(int(width * .51), 174, int(width * .47), height - 236)
             if right_panel.collidepoint(pygame.mouse.get_pos()):
                 locs = [x.strip() for x in self.app.setup_puzzle_locations if x.strip()]
                 visible = max(1, int((right_panel.bottom - 28 - (right_panel.y + 190)) / 38))
