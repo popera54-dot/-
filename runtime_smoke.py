@@ -9,7 +9,7 @@ os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
 import pygame
 import main
-from stage5_tasks import CyberMemoryTask, DreidelSaysTask, FirewallMazeTask, MissingLetterTask, OilCatchTask, SymbolMatrixTask, TriviaTask
+from stage5_tasks import CyberMemoryTask, ColorCodeTask, DreidelSaysTask, FirewallMazeTask, MissingLetterTask, OilCatchTask, SymbolMatrixTask, TriviaTask, WireCutTask, WordDecryptTask
 
 
 def require(condition, message):
@@ -42,6 +42,17 @@ def run():
                 "scan beam surface was not cached between frames")
         require(main._glow_layer(12, (50, 220, 180), 13) is main._glow_layer(12, (50, 220, 180), 13),
                 "glow surface was not cached between frames")
+
+        # Fixed-time terminal imagery must be stable, not flicker to random glyphs each frame.
+        background_probe = main.CinematicBackground()
+        background_probe.time = 4.25
+        background_a = pygame.Surface((main.WIDTH, main.HEIGHT))
+        background_b = pygame.Surface((main.WIDTH, main.HEIGHT))
+        background_probe.draw(background_a, danger=0.3)
+        background_probe.draw(background_b, danger=0.3)
+        require(pygame.image.tostring(background_a, "RGB")
+                == pygame.image.tostring(background_b, "RGB"),
+                "cinematic background changed at a fixed time value")
 
         # Test distinct procedural cues, non-silent buffers, global mute, and ambient lifecycle.
         expected_sounds = {"click", "confirm", "puzzle", "unlock", "transition",
@@ -358,6 +369,28 @@ def run():
         trivia_task.handle(answer_click, pygame, main.WIDTH, main.HEIGHT)
         require(not trivia_task.done and trivia_task.timeout_count == 1,
                 "stage 5 trivia accepted a stale post-timeout click")
+
+        # Wrong mini-game inputs produce concise feedback; correct inputs mark success.
+        maze_feedback = FirewallMazeTask()
+        maze_feedback.bind_app(app)
+        maze_feedback.player = [1, 1]
+        maze_feedback.handle(
+            pygame.event.Event(pygame.KEYDOWN, {"key": pygame.K_LEFT, "unicode": ""}),
+            pygame, main.WIDTH, main.HEIGHT
+        )
+        require(maze_feedback.feedback_text == "FIREWALL BLOCKED"
+                and not maze_feedback.feedback_success,
+                "firewall maze did not show a blocked-move rejection")
+
+        color_feedback = ColorCodeTask()
+        color_feedback.bind_app(app)
+        color_feedback.handle(
+            pygame.event.Event(pygame.MOUSEBUTTONDOWN, {
+                "button": 1, "pos": (main.WIDTH // 2 - 178, int(main.HEIGHT * .62) + 45)
+            }), pygame, main.WIDTH, main.HEIGHT
+        )
+        require(color_feedback.cursor == 0 and color_feedback.feedback_text == "SEQUENCE RESET",
+                "color sequence did not provide feedback after a wrong color")
 
         # The four-branch preview must restart when the player actually receives the task.
         dreidel_task = DreidelSaysTask()
