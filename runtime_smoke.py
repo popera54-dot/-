@@ -7,7 +7,7 @@ os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
 import pygame
 import main
-from stage5_tasks import CyberMemoryTask, MissingLetterTask, SymbolMatrixTask
+from stage5_tasks import CyberMemoryTask, DreidelSaysTask, MissingLetterTask, SymbolMatrixTask, TriviaTask
 
 
 def require(condition, message):
@@ -55,6 +55,33 @@ def run():
             pygame, main.WIDTH, main.HEIGHT, app.background.time
         )
         pygame.display.flip()
+
+        # Per-player timers begin when tasks are assigned, not when the task pool is created.
+        trivia_task = TriviaTask()
+        trivia_task.deadline = time.monotonic() - 1
+        trivia_task.reset()
+        require(trivia_task.deadline > time.monotonic() + 29,
+                "stage 5 trivia timer did not reset when the verified player started")
+
+        # A stale click after time-out cannot be accepted as an answer for the new attempt.
+        trivia_task.deadline = time.monotonic() - 1
+        answer_click = pygame.event.Event(
+            pygame.MOUSEBUTTONDOWN,
+            {"button": 1, "pos": (int(main.WIDTH / 2 - 180), 545)}
+        )
+        trivia_task.handle(answer_click, pygame, main.WIDTH, main.HEIGHT)
+        require(not trivia_task.done and trivia_task.timeout_count == 1,
+                "stage 5 trivia accepted a stale post-timeout click")
+
+        # The four-branch preview must restart when the player actually receives the task.
+        dreidel_task = DreidelSaysTask()
+        dreidel_task.preview_until = time.monotonic() - 1
+        dreidel_task.reset()
+        require(dreidel_task.preview_until > time.monotonic() + 2.2,
+                "stage 5 sequence preview expired before the player's turn")
+        dreidel_task.update(0.0)
+        require(dreidel_task.flash_index == dreidel_task.sequence[0],
+                "stage 5 sequence did not begin with its first visible branch")
 
         # The brief missing-letter flash must not accept an answer while the letter is hidden.
         letter_task = MissingLetterTask()
