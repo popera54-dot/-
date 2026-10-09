@@ -43,6 +43,8 @@ class LaterStagesController:
         self.audio_enabled = False
         self.sound = None
         self._mic_stream = None
+        self.music_sound = None
+        self.music_channel = None
         self.mic_level = 0.0
         self._previous_gray = None
         self.energy = 0.0
@@ -75,6 +77,13 @@ class LaterStagesController:
             except Exception:
                 pass
         self._mic_stream = None
+        if self.music_channel is not None:
+            try:
+                self.music_channel.stop()
+            except Exception:
+                pass
+        self.music_channel = None
+        self.music_sound = None
 
     def start(self, stage):
         self._stop_mic()
@@ -144,6 +153,7 @@ class LaterStagesController:
             self.mic_level = 0.0
             self.app.timer_frozen = self.app.remaining_seconds
             self._start_mic()
+            self._start_celebration_music()
 
     def app_width(self):
         return self.app.screen_width if hasattr(self.app, "screen_width") else pygame.display.get_surface().get_width()
@@ -175,6 +185,59 @@ class LaterStagesController:
                 self.sound.play()
             except Exception:
                 pass
+
+    def _start_celebration_music(self):
+        """Generate a short original synth celebration loop; no external track is required."""
+        try:
+            mixer = pygame.mixer.get_init()
+            if not mixer:
+                return
+            sample_rate, sample_format, channels = mixer
+            if sample_format != -16:
+                return
+            duration = 8.0
+            count = int(sample_rate * duration)
+            t = np.arange(count, dtype=np.float32) / float(sample_rate)
+
+            melody_notes = np.asarray(
+                [659.25, 659.25, 783.99, 659.25, 587.33, 587.33, 523.25, 587.33,
+                 659.25, 783.99, 880.00, 783.99, 659.25, 587.33, 523.25, 587.33],
+                dtype=np.float32
+            )
+            melody_step = np.floor(t / 0.25).astype(np.int32) % len(melody_notes)
+            melody_phase = np.mod(t, 0.25)
+            melody_envelope = np.minimum(1.0, melody_phase * 30.0) * np.exp(-melody_phase * 5.0)
+            melody = np.sin(2 * np.pi * melody_notes[melody_step] * t) * melody_envelope * 0.16
+
+            bass_notes = np.asarray([110.0, 146.83, 130.81, 164.81], dtype=np.float32)
+            bass_step = np.floor(t / 0.5).astype(np.int32) % len(bass_notes)
+            bass_phase = np.mod(t, 0.5)
+            bass_envelope = np.exp(-bass_phase * 3.0)
+            bass = np.sin(2 * np.pi * bass_notes[bass_step] * t) * bass_envelope * 0.12
+
+            beat_phase = np.mod(t, 0.5)
+            kick_envelope = np.where(beat_phase < 0.16, np.exp(-beat_phase * 28.0), 0.0)
+            kick_frequency = 76.0 - 110.0 * beat_phase
+            kick = np.sin(2 * np.pi * kick_frequency * t) * kick_envelope * 0.22
+
+            snare_phase = np.mod(t, 1.0)
+            snare_envelope = np.where((snare_phase > 0.48) & (snare_phase < 0.56),
+                                      np.exp(-(snare_phase - 0.48) * 38.0), 0.0)
+            noise = np.random.default_rng(77).normal(0.0, 1.0, count).astype(np.float32)
+            snare = noise * snare_envelope * 0.045
+
+            mix = melody + bass + kick + snare
+            peak = max(1.0, float(np.max(np.abs(mix))))
+            samples = np.asarray(mix / peak * 25000, dtype=np.int16)
+            if channels > 1:
+                samples = np.repeat(samples[:, None], channels, axis=1)
+            self.music_sound = pygame.sndarray.make_sound(samples.copy())
+            self.music_channel = pygame.mixer.find_channel(True)
+            if self.music_channel is not None:
+                self.music_channel.play(self.music_sound, loops=-1)
+        except Exception:
+            self.music_sound = None
+            self.music_channel = None
 
     def _start_mic(self):
         try:
@@ -237,6 +300,7 @@ class LaterStagesController:
                 self.phase = "memory"
                 self.memory_started = now
                 self.memory_attempt += 1
+                self.memory_error = ""
 
         elif self.stage == 11:
             if self.phase == "input" and now - self.quantum_started >= 180:
@@ -520,6 +584,8 @@ class LaterStagesController:
                   (width / 2, 151), (255, 194, 78), align="center", mono=True, bold=True)
         draw_text(canvas, f"PROGRESS // {self.next_number_index:02d}/10", 13,
                   (width / 2, 184), (70, 255, 210), align="center", mono=True)
+        draw_text(canvas, f"GLOBAL TIMER // {self.app.timer_string()}", 11,
+                  (width - 145, 44), (255, 67, 84), align="center", mono=True, bold=True)
         self.number_rects = {}
         for number in self.sequence:
             x, y = self.number_positions[number]
