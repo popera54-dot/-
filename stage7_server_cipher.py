@@ -84,6 +84,7 @@ class Stage7Controller:
                                      390 + (i // 4) * 190, 180, 150)
                     if rr.collidepoint(event.pos):
                         if i == 4:  # documented intended answer: PURPLE
+                            self.app.stage_message = "SERVER CORE SECURED"
                             self.app.stage_manager.goto(8)
                         else:
                             self.app.stage_message = "SERVER FAILURE // WRONG NODE // RESTART PROTOCOL"
