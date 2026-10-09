@@ -502,10 +502,15 @@ class Stage5Controller:
         if self.phase == "verify":
             self.app.webcam.read()
         elif self.phase == "task" and self.current_task:
-            if isinstance(self.current_task, OilCatchTask):
-                self.current_task.update_and_collide(dt, WIDTH, HEIGHT)
+            task = self.current_task
+            if isinstance(task, OilCatchTask):
+                task.update_and_collide(dt, WIDTH, HEIGHT)
             else:
-                self.current_task.update(dt)
+                task.update(dt)
+            # Oil Catch can complete in the frame update rather than from an input event.
+            # Advance immediately so the game never waits for an unrelated extra click.
+            if task.done:
+                self.advance()
 
     def draw(self, surface):
         t = self.app.background.time
