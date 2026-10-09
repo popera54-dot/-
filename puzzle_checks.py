@@ -1,6 +1,7 @@
 """Deterministic checks for fixed-value puzzles and the generated stage-four maze."""
 
 from stage4_puzzle import Stage4Controller
+from stage5_tasks import ColorCodeTask
 
 
 def check_stage_3():
@@ -84,6 +85,13 @@ def check_stage_11():
     assert (X, Y, Z) == (64, 200, 66)
 
 
+def check_stage_5_color_order():
+    task = ColorCodeTask()
+    expected = ["כחול", "צהוב", "אדום"]
+    actual = [task.colors[index][0] for index in task.order]
+    assert actual == expected, f"Color Code order should be cold-to-hot: {actual}"
+
+
 def check_task_bank():
     tasks = [
         "Firewall Maze",
@@ -104,6 +112,7 @@ def check_task_bank():
 def run_all():
     check_stage_3()
     check_stage_4()
+    check_stage_5_color_order()
     check_stage_6()
     check_stage_7()
     check_stage_8()
