@@ -49,12 +49,16 @@ The finale uses the webcam to estimate movement and optionally opens the microph
 
 - The game synthesizes layered sound effects and a low-volume ambient drone; no extra audio files are required.
 - Correct solutions, wrong inputs, stage unlocks, the opening intrusion, the last 10 seconds, and the final victory use distinct audio cues. Stage 8 keeps its four-note auditory puzzle.
-- Press `F8` at any time to mute or restore game audio. Celebration music is mixed below sound effects so the final victory cue remains audible.
+- `F7` toggles the low-volume suspense drone independently, `F8` mutes/restores all game audio, and `F9` / `F10` lower or raise master volume. The current sound level and ambience state appear in the HUD.
+- The soundtrack remains restrained during the main mission, gets subtly louder as the deadline approaches, and adds a low double-heartbeat cue in the final minute before the last-ten-second beeps.
+- Each stage unlock gets a distinct success callout; error tones are triggered by rejected answers, not by repeatedly drawing the error text.
 - If no audio device is available, the game continues without blocking puzzles or stage progression.
 
 ## Operator controls
 
+- `F7` — toggle suspense ambience
 - `F8` — mute/unmute game audio
+- `F9` / `F10` — lower/raise master volume
 - `Ctrl + Shift + Right Arrow` — skip the current stage for testing
 - `Ctrl + Alt + Shift + Esc` — emergency exit to Windows
 
