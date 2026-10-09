@@ -187,7 +187,8 @@ class LaterStagesController:
             if channels > 1:
                 samples = np.repeat(samples[:, None], channels, axis=1)
             self.sound = pygame.sndarray.make_sound(np.ascontiguousarray(samples))
-            self.sound.set_volume(0.24)
+            master = getattr(getattr(self.app, "audio", None), "master_volume", 1.0)
+            self.sound.set_volume(0.24 * master)
             self.audio_enabled = True
         except Exception:
             self.sound = None
@@ -248,8 +249,12 @@ class LaterStagesController:
             self.music_sound = pygame.sndarray.make_sound(samples.copy())
             self.music_sound.set_volume(0.38)
             self.music_channel = pygame.mixer.find_channel(True)
-            if self.music_channel is not None and self.app.audio.enabled:
-                self.music_channel.play(self.music_sound, loops=-1)
+            if self.music_channel is not None:
+                self.music_channel.set_volume(
+                    getattr(getattr(self.app, "audio", None), "master_volume", 1.0)
+                )
+                if self.app.audio.enabled:
+                    self.music_channel.play(self.music_sound, loops=-1)
         except Exception:
             self.music_sound = None
             self.music_channel = None
