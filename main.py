@@ -9,6 +9,8 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from functools import lru_cache
+
 import cv2
 import numpy as np
 import pygame
@@ -54,9 +56,16 @@ MONO_NAME = pygame.font.match_font("consolas") or pygame.font.get_default_font()
 BOLD_NAME = pygame.font.match_font("segoeuib") or FONT_NAME
 
 
+@lru_cache(maxsize=96)
 def font(size: int, mono: bool = False, bold: bool = False) -> pygame.font.Font:
     name = MONO_NAME if mono else (BOLD_NAME if bold else FONT_NAME)
     return pygame.font.Font(name, size)
+
+
+@lru_cache(maxsize=4096)
+def _render_text(text: str, size: int, color: tuple, mono: bool, bold: bool):
+    # Pygame surfaces are safe to reuse as immutable blit sources.
+    return font(size, mono=mono, bold=bold).render(text, True, color)
 
 
 def clamp(value, low, high):
@@ -65,8 +74,8 @@ def clamp(value, low, high):
 
 def draw_text(surface, text, size, pos, color=(235, 245, 255),
               *, align="topleft", mono=False, bold=False):
-    f = font(size, mono=mono, bold=bold)
-    img = f.render(text, True, color)
+    text = str(text)
+    img = _render_text(text, int(size), tuple(color), mono, bold)
     rect = img.get_rect()
     setattr(rect, align, pos)
     surface.blit(img, rect)
