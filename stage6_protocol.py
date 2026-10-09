@@ -77,6 +77,7 @@ class Stage6Controller:
                     self.app.cipher_digits.append(event.unicode)
                     if len(self.app.cipher_digits) == 4:
                         if "".join(self.app.cipher_digits) == "8421":
+                            self.app.stage_message = "DARK PROTOCOL CRACKED"
                             self.app.stage_manager.goto(7)
                         else:
                             self.app.stage_message = "CODE REJECTED // RECHECK THE PHYSICAL CLUE"
