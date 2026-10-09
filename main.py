@@ -1018,6 +1018,45 @@ class StageManager:
         self.transition_started_at = None
         self.transition_from = 0
         self.transition_to = 0
+        self.unlock_sound = self._create_unlock_sound()
+
+    @staticmethod
+    def _create_unlock_sound():
+        """Build a quiet, short sci-fi unlock cue without requiring external audio files."""
+        try:
+            mixer_info = pygame.mixer.get_init()
+            if not mixer_info:
+                return None
+            sample_rate, sample_format, channels = mixer_info
+            if sample_format != -16 or channels < 1:
+                return None
+
+            duration = 0.34
+            t = np.arange(int(sample_rate * duration), dtype=np.float32) / sample_rate
+            f1 = 190.0 + 145.0 * np.clip(t / 0.11, 0.0, 1.0)
+            f2 = 335.0 - 75.0 * np.clip((t - 0.11) / 0.11, 0.0, 1.0)
+            f3 = 260.0 + 390.0 * np.clip((t - 0.22) / 0.12, 0.0, 1.0)
+            freq = np.where(t < 0.11, f1, np.where(t < 0.22, f2, f3))
+            phase = 2.0 * np.pi * np.cumsum(freq) / sample_rate
+            envelope = np.minimum(1.0, t / 0.014) * np.clip((duration - t) / 0.085, 0.0, 1.0)
+            pulse = 0.82 + 0.18 * np.sin(2.0 * np.pi * 13.0 * t)
+            wave = (np.sin(phase) + 0.22 * np.sin(phase * 1.51)) * envelope * pulse
+            mono = np.clip(wave * 5200, -32767, 32767).astype(np.int16)
+            audio = np.repeat(mono[:, None], channels, axis=1) if channels > 1 else mono
+            cue = pygame.sndarray.make_sound(audio)
+            cue.set_volume(0.17)
+            return cue
+        except (pygame.error, ValueError, TypeError, AttributeError, RuntimeError):
+            # Some devices and headless sessions cannot initialize audio; visuals remain complete.
+            return None
+
+    def _play_unlock_sound(self):
+        if self.unlock_sound is None:
+            return
+        try:
+            self.unlock_sound.play()
+        except pygame.error:
+            pass
 
     def goto(self, stage):
         previous_stage = self.stage
@@ -1033,6 +1072,7 @@ class StageManager:
             self.transition_from = previous_stage
             self.transition_to = stage
             self.transition_started_at = time.monotonic()
+            self._play_unlock_sound()
 
         self.stage = stage
         self.app.stage_started_at = time.monotonic()
