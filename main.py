@@ -645,9 +645,19 @@ class Button:
                          (self.rect.left + 7, self.rect.top + cut),
                          (self.rect.left + 7, self.rect.bottom - cut), 2)
         if self.hover:
-            pygame.draw.line(surface, self.accent,
+            pulse = 0.5 + 0.5 * math.sin(time.monotonic() * 8.0)
+            pygame.draw.line(surface, border,
                              (self.rect.left + 18, self.rect.top + 7),
                              (self.rect.right - 18, self.rect.top + 7), 2)
+            # A narrow scan pulse moves across hovered controls; it stops at the panel edges.
+            scan_span = max(1, self.rect.w - 20)
+            scan_x = self.rect.left + 10 + int((time.monotonic() * 235) % scan_span)
+            pygame.draw.line(surface, tuple(int(c * (0.55 + pulse * 0.45)) for c in border),
+                             (scan_x, self.rect.top + 12),
+                             (scan_x, self.rect.bottom - 12), 2)
+            corner = 8 + int(pulse * 3)
+            pygame.draw.line(surface, border, (self.rect.right - corner - 5, self.rect.bottom - 5),
+                             (self.rect.right - 5, self.rect.bottom - 5), 2)
         draw_text(surface, self.label, 22, self.rect.center, (235, 255, 250),
                   align="center", bold=True)
         if self.subtitle:
@@ -915,8 +925,12 @@ class StageManager:
         self.stage6 = Stage6Controller(app)
         self.stage7 = Stage7Controller(app)
         self.later = LaterStagesController(app)
+        self.transition_started_at = None
+        self.transition_from = 0
+        self.transition_to = 0
 
     def goto(self, stage):
+        previous_stage = self.stage
         requested_stage = stage
         if self.app.game_started_at and 5 <= stage <= 11:
             remaining = self.app.remaining_seconds
@@ -924,6 +938,11 @@ class StageManager:
             estimated_needed = 270 + max(0, 11 - stage) * 30
             if remaining < estimated_needed:
                 stage = 11 if remaining >= 270 else 12
+
+        if previous_stage and stage != previous_stage:
+            self.transition_from = previous_stage
+            self.transition_to = stage
+            self.transition_started_at = time.monotonic()
 
         self.stage = stage
         self.app.stage_started_at = time.monotonic()
@@ -1316,6 +1335,75 @@ class EscapeRoomApp:
         add_rect = pygame.Rect(panel.right - 92, panel.y + 12, 74, 29)
         rounded_panel(surface, add_rect, (7, 29, 31), (55, 221, 180), 8, 1)
         draw_text(surface, "+ חלק", 11, add_rect.center, (91, 255, 211), align="center", bold=True)
+    def draw_transition(self, surface):
+        """Short visual payoff when a security layer is breached and the next stage opens."""
+        if self.transition_started_at is None:
+            return
+        elapsed = time.monotonic() - self.transition_started_at
+        duration = 0.86
+        if elapsed >= duration:
+            self.transition_started_at = None
+            return
+
+        progress = clamp(elapsed / duration, 0.0, 1.0)
+        intensity = 1.0 - progress
+        veil = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        veil.fill((1, 5, 7, int(48 * intensity)))
+        surface.blit(veil, (0, 0))
+
+        # Fast broken scan bars, like a security firewall tearing open.
+        sweep_y = int((progress * 1.24 - 0.12) * HEIGHT)
+        for i in range(11):
+            y = sweep_y + ((i * 73) % 240) - 120
+            x = (i * 193 + int(progress * WIDTH * 0.62)) % WIDTH
+            width = 90 + ((i * 67) % 280)
+            color = (37, 255, 151) if i % 3 else (255, 77, 71)
+            if 0 <= y < HEIGHT:
+                pygame.draw.rect(surface, color, (x, y, width, 1 + (i % 3 == 0)))
+
+        # Two expanding signal rings give the unlock a physical, pulse-like feel.
+        center = (WIDTH // 2, HEIGHT // 2)
+        ring_radius = int(50 + progress * 570)
+        if ring_radius < max(WIDTH, HEIGHT):
+            pygame.draw.circle(surface, (24, 110, 75), center, ring_radius, 2)
+        inner_radius = int(28 + progress * 290)
+        pygame.draw.circle(surface, (38, 196, 121), center, inner_radius, 1)
+
+        panel = pygame.Rect(WIDTH // 2 - 345, HEIGHT // 2 - 112, 690, 224)
+        rounded_panel(surface, panel, (2, 10, 12), (56, 239, 154), 18, 2)
+        pygame.draw.line(surface, (255, 73, 68),
+                         (panel.x + 22, panel.y + 14),
+                         (panel.x + 103, panel.y + 14), 2)
+        pygame.draw.line(surface, (53, 255, 169),
+                         (panel.right - 105, panel.bottom - 14),
+                         (panel.right - 22, panel.bottom - 14), 2)
+
+        stage = max(1, min(12, int(self.transition_to)))
+        draw_text(surface, f"SECURITY LAYER // {stage:02d}", 13,
+                  (panel.centerx, panel.y + 31), (80, 229, 151),
+                  align="center", mono=True, bold=True)
+        draw_text(surface, f"PROTOCOL {stage:02d} UNLOCKED", 34,
+                  (panel.centerx, panel.y + 83), (245, 255, 249),
+                  align="center", mono=True, bold=True)
+        stage_label = self.app.stage_names.get(stage, "UNKNOWN SIGNAL")
+        draw_text(surface, fit_text(stage_label.upper(), 17, panel.w - 62, mono=True, bold=True),
+                  17, (panel.centerx, panel.y + 127), (255, 174, 105),
+                  align="center", mono=True, bold=True)
+
+        # Compact 12-stage progression strip; completed nodes stay lit behind the active node.
+        node_w, node_gap = 30, 10
+        total_w = 12 * node_w + 11 * node_gap
+        start_x = panel.centerx - total_w // 2
+        for index in range(12):
+            rr = pygame.Rect(start_x + index * (node_w + node_gap), panel.bottom - 31, node_w, 4)
+            if index + 1 < stage:
+                color = (56, 220, 131)
+            elif index + 1 == stage:
+                color = (255, 160, 92)
+            else:
+                color = (30, 52, 49)
+            pygame.draw.rect(surface, color, rr)
+
     def draw_global_hud(self, surface):
         if not self.game_started_at or self.stage_manager.stage in (9, 12):
             return
@@ -1586,6 +1674,7 @@ class EscapeRoomApp:
             self.operator_setup(screen)
         else:
             self.stage_manager.draw(screen)
+            self.stage_manager.draw_transition(screen)
             self.stage_manager.later.draw_lifeline(screen, draw_text, rounded_panel, pygame, WIDTH, HEIGHT)
             self.draw_global_hud(screen)
 
