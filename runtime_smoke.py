@@ -149,6 +149,66 @@ def run():
         require(not main.draw_face_lock(face_surface, CameraProbe(), pygame.Rect(0, 0, 320, 220)),
                 "face-lock overlay claimed a target when none was detected")
 
+        # A failed DirectShow opening falls back to the platform default backend.
+        class CameraBackendProbe:
+            def __init__(self, opened):
+                self.opened = opened
+                self.released = False
+
+            def isOpened(self):
+                return self.opened
+
+            def release(self):
+                self.released = True
+
+        primary_backend = CameraBackendProbe(False)
+        fallback_backend = CameraBackendProbe(True)
+        backends = [primary_backend, fallback_backend]
+        camera_probe = main.Webcam.__new__(main.Webcam)
+        camera_probe.cap = None
+        camera_probe.frame = None
+        camera_probe.face_box = None
+        camera_probe.available = False
+        camera_probe.last_error = None
+        camera_probe.face_detector = None
+        original_capture = main.cv2.VideoCapture
+        try:
+            def fake_capture(index, *args):
+                require(index == 0, "webcam fallback changed the expected camera index")
+                return backends.pop(0)
+            main.cv2.VideoCapture = fake_capture
+            camera_probe._open()
+        finally:
+            main.cv2.VideoCapture = original_capture
+        require(camera_probe.available and camera_probe.cap is fallback_backend,
+                "webcam did not recover through its fallback backend")
+        require(primary_backend.released,
+                "failed primary webcam backend was not released")
+        camera_probe.release()
+        require(fallback_backend.released and not camera_probe.available,
+                "webcam release left a camera handle active")
+
+        # A disconnected or failed camera read must never leave an old face eligible for registration.
+        class StaleFrameCamera:
+            def read(self):
+                return False, None
+        webcam = app.webcam
+        prior_camera_state = (
+            webcam.cap, webcam.available, webcam.frame, webcam.face_box, webcam.last_error
+        )
+        try:
+            webcam.cap = StaleFrameCamera()
+            webcam.available = True
+            webcam.frame = main.np.zeros((30, 30, 3), dtype=main.np.uint8)
+            webcam.face_box = (2, 2, 20, 20)
+            require(webcam.read() is None and webcam.frame is None and webcam.face_box is None,
+                    "failed camera read left a stale frame or face box")
+            require(webcam.capture_face() is None,
+                    "stale webcam frame remained eligible for face registration")
+        finally:
+            (webcam.cap, webcam.available, webcam.frame,
+             webcam.face_box, webcam.last_error) = prior_camera_state
+
         # Registration must fail safely when OpenCV cannot write a face template,
         # and must register only after a real image has been saved and read back.
         old_player_dir = main.PLAYER_DIR
