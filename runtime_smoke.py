@@ -7,6 +7,7 @@ os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
 import pygame
 import main
+from stage5_tasks import CyberMemoryTask, SymbolMatrixTask
 
 
 def require(condition, message):
@@ -29,6 +30,20 @@ def run():
             require(app.stage_manager.stage == stage, f"stage {stage} did not start")
 
         later = app.stage_manager.later
+
+        # Render the two symbol-heavy mini-games to verify their Windows-safe vector icons.
+        matrix_task = SymbolMatrixTask()
+        matrix_task.draw(
+            main.screen, main.draw_text, main.rounded_panel, main.glow_circle,
+            pygame, main.WIDTH, main.HEIGHT, app.background.time
+        )
+        memory_task = CyberMemoryTask()
+        memory_task.revealed = [True] * 8
+        memory_task.draw(
+            main.screen, main.draw_text, main.rounded_panel, main.glow_circle,
+            pygame, main.WIDTH, main.HEIGHT, app.background.time
+        )
+        pygame.display.flip()
 
         # Fast-forward the sound pattern and verify the state machine leaves listening.
         app.stage_manager.goto(8)
