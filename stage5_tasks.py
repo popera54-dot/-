@@ -38,6 +38,64 @@ class TaskBase:
         return TaskResult(completed=self.done)
 
 
+def draw_hanukkah_symbol(surface, symbol, center, size, pygame):
+    """Draw crisp vector symbols so Windows font/emoji support cannot break a puzzle."""
+    x, y = int(center[0]), int(center[1])
+    s = max(6, int(size))
+    line = max(2, s // 7)
+    palette = {
+        "menorah": (84, 255, 209),
+        "jug": (255, 195, 86),
+        "flame": (255, 91, 108),
+        "star": (109, 181, 255),
+    }
+    color = palette.get(symbol, (84, 255, 209))
+    dark = (6, 23, 28)
+
+    if symbol == "jug":
+        body = pygame.Rect(x - int(s * .48), y - int(s * .30), int(s * .96), int(s * .72))
+        pygame.draw.ellipse(surface, dark, body)
+        pygame.draw.ellipse(surface, color, body, line)
+        neck = pygame.Rect(x - int(s * .18), y - int(s * .62), int(s * .36), int(s * .34))
+        pygame.draw.rect(surface, dark, neck, border_radius=max(2, s // 8))
+        pygame.draw.rect(surface, color, neck, line, border_radius=max(2, s // 8))
+        pygame.draw.arc(surface, color, (x - int(s * .74), y - int(s * .08), int(s * .54), int(s * .48)),
+                        math.radians(270), math.radians(90), line)
+    elif symbol == "flame":
+        outer = [(x, y - s // 2), (x - s // 3, y + s // 8),
+                 (x - s // 5, y + s // 2), (x + s // 4, y + s // 2),
+                 (x + s // 3, y), (x + s // 8, y - s // 6)]
+        pygame.draw.polygon(surface, color, outer)
+        inner = [(x, y - s // 6), (x - s // 7, y + s // 5),
+                 (x + s // 8, y + s // 3), (x + s // 5, y + s // 12)]
+        pygame.draw.polygon(surface, (255, 226, 146), inner)
+    elif symbol == "menorah":
+        base_y = y + s // 3
+        stem_top = y - s // 3
+        pygame.draw.line(surface, color, (x, base_y), (x, stem_top), line)
+        pygame.draw.line(surface, color, (x - s // 2, base_y), (x + s // 2, base_y), line)
+        for offset in (-s // 2, -s // 4, 0, s // 4, s // 2):
+            branch_top = y - (s // 4 if offset == 0 else s // 10)
+            pygame.draw.line(surface, color, (x + offset, base_y), (x + offset, branch_top), line)
+            pygame.draw.line(surface, (255, 194, 78),
+                             (x + offset, branch_top), (x + offset, branch_top - max(3, s // 9)), line)
+            pygame.draw.circle(surface, (255, 194, 78),
+                               (x + offset, branch_top - max(3, s // 9)), max(2, line))
+    elif symbol == "star":
+        r = s // 2
+        top = (x, y - r)
+        left_upper = (x - r, y - r // 3)
+        right_upper = (x + r, y - r // 3)
+        left_lower = (x - r * 3 // 4, y + r)
+        right_lower = (x + r * 3 // 4, y + r)
+        pygame.draw.polygon(surface, dark, [top, right_lower, left_upper])
+        pygame.draw.polygon(surface, dark, [top, left_lower, right_upper])
+        pygame.draw.polygon(surface, color, [top, right_lower, left_upper], line)
+        pygame.draw.polygon(surface, color, [top, left_lower, right_upper], line)
+    else:
+        pygame.draw.circle(surface, color, (x, y), max(3, s // 3), line)
+
+
 class FirewallMazeTask(TaskBase):
     name = "Firewall Maze"
 
@@ -170,7 +228,7 @@ class OilCatchTask(TaskBase):
 class SymbolMatrixTask(TaskBase):
     name = "Symbol Matrix"
 
-    SYMBOLS = ["🕎", "🫙", "🔥"]
+    SYMBOLS = ["menorah", "jug", "flame"]
 
     def __init__(self, rng=None):
         super().__init__(rng)
@@ -214,11 +272,13 @@ class SymbolMatrixTask(TaskBase):
             y = i // cols
             rr = pygame.Rect(ox + x * cell, oy + y * 72, cell - 10, 60)
             rounded_panel(surface, rr, (5, 16, 21), (34, 77, 78), 12, 1)
-            draw_text(surface, symbol, 26, rr.center, (229, 240, 241), align="center")
+            draw_hanukkah_symbol(surface, symbol, rr.center, 31, pygame)
         for i, symbol in enumerate(self.SYMBOLS):
             rr = pygame.Rect(width / 2 - 210 + i * 150, height - 125, 130, 55)
             rounded_panel(surface, rr, (7, 18, 23), (70, 190, 165), 12, 2)
-            draw_text(surface, f"{i+1}  {symbol}", 18, rr.center, (235, 247, 246), align="center")
+            draw_text(surface, str(i + 1), 17, (rr.x + 24, rr.centery),
+                      (255, 194, 78), align="center", mono=True, bold=True)
+            draw_hanukkah_symbol(surface, symbol, (rr.centerx + 20, rr.centery), 26, pygame)
 
 
 class WordDecryptTask(TaskBase):
@@ -263,7 +323,7 @@ class CyberMemoryTask(TaskBase):
 
     def __init__(self, rng=None):
         super().__init__(rng)
-        self.values = ["🫙", "🫙", "🔥", "🔥", "🕎", "🕎", "✡", "✡"]
+        self.values = ["jug", "jug", "flame", "flame", "menorah", "menorah", "star", "star"]
         self.rng.shuffle(self.values)
         self.revealed = [False] * 8
         self.matched = [False] * 8
@@ -311,7 +371,7 @@ class CyberMemoryTask(TaskBase):
             rounded_panel(surface, rr, (13, 29, 32) if matched else (4, 14, 20),
                           (255, 195, 88) if matched else (46, 88, 91), 16, 2)
             if self.revealed[i] or matched:
-                draw_text(surface, self.values[i], 38, rr.center, (238, 244, 245), align="center")
+                draw_hanukkah_symbol(surface, self.values[i], rr.center, 48, pygame)
             else:
                 draw_text(surface, "?", 38, rr.center, (77, 255, 210), align="center", mono=True, bold=True)
 
