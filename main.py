@@ -1221,25 +1221,29 @@ class Webcam:
             self.last_error = str(exc)
             self.available = False
 
-    def read(self):
+    def read(self, detect_face=True):
         if not self.available:
             return None
         ok, frame = self.cap.read()
         if not ok:
             return None
         frame = cv2.flip(frame, 1)
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        # Reuse the cascade instead of reloading its XML file for every video frame.
-        faces = ()
-        if self.face_detector is not None:
-            try:
-                faces = self.face_detector.detectMultiScale(
-                    gray, 1.15, 5, minSize=(90, 90)
-                )
-            except cv2.error as exc:
-                self.last_error = str(exc)
-        self.face_box = max(faces, key=lambda b: b[2] * b[3]) if len(faces) else None
         self.frame = frame
+        if detect_face:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            # Reuse the cascade instead of reloading its XML file for every video frame.
+            faces = ()
+            if self.face_detector is not None:
+                try:
+                    faces = self.face_detector.detectMultiScale(
+                        gray, 1.15, 5, minSize=(90, 90)
+                    )
+                except cv2.error as exc:
+                    self.last_error = str(exc)
+            self.face_box = max(faces, key=lambda b: b[2] * b[3]) if len(faces) else None
+        else:
+            # The dance finale needs only frame-to-frame motion, not face detection.
+            self.face_box = None
         return frame
 
     def capture_face(self):
