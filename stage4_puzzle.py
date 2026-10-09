@@ -133,16 +133,23 @@ class Stage4Controller:
             if len(self.decoy_items) >= 22:
                 break
 
-        selected_leaves = [cell for _, cell in leaves[:10]]
-        if self.finish_cell not in selected_leaves:
-            selected_leaves[-1] = self.finish_cell
-        numbers = iter(self.EXIT_NUMBERS)
-        self.exits = []
-        for cell in selected_leaves:
-            if cell == self.finish_cell:
-                self.exits.append((cell, 15))
-            else:
-                self.exits.append((cell, next(numbers)))
+        # Only the 15 exit may have a route that passes through all three target symbols.
+        target_cells = set(self.target_cells.values())
+        safe_other_leaves = []
+        for _, candidate in leaves:
+            if candidate == self.finish_cell:
+                continue
+            candidate_path = [candidate]
+            while candidate_path[-1] != start:
+                candidate_path.append(parent[candidate_path[-1]])
+            if not target_cells.issubset(set(candidate_path)):
+                safe_other_leaves.append(candidate)
+            if len(safe_other_leaves) >= 9:
+                break
+
+        self.exits = [(self.finish_cell, 15)]
+        for cell, number in zip(safe_other_leaves, self.EXIT_NUMBERS):
+            self.exits.append((cell, number))
 
     def _draw_icon(self, surface, name, center, scale, pygame):
         x, y = center
@@ -381,7 +388,6 @@ class Stage4Controller:
         if self.route_answer == "15":
             self.route_verified = True
             self.error = ""
-            self.app.stage_message = "ROUTE VERIFIED // 15"
         else:
             self.route_verified = False
             self.error = "המסלול הנכון חייב להגיע ליציאה 15."
@@ -422,7 +428,6 @@ class Stage4Controller:
                 if not self.puzzle_confirmed:
                     self.puzzle_confirmed = True
                     self.error = ""
-                    self.app.stage_message = "PHYSICAL PUZZLE // 48 CONFIRMED"
                     return
                 self.phase = "complete"
                 self.app.stage_message = "STAGE 04 CLEARED  //  15 + 48 CONFIRMED"
