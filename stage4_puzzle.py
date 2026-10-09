@@ -397,14 +397,16 @@ class Stage4Controller:
         slot_w = target_panel.w / 3
         labels = ("סביבון", "כד שמן", "חנוכייה")
         for i, (item, label) in enumerate(zip(self.TARGETS, labels)):
-            slot = pygame.Rect(target_panel.x + int(i * slot_w), target_panel.y + 6,
+            # In Hebrew, item one begins at the right edge of the target strip.
+            visual_index = len(labels) - 1 - i
+            slot = pygame.Rect(target_panel.x + int(visual_index * slot_w), target_panel.y + 6,
                                int(slot_w - 6), target_panel.h - 12)
             rounded_panel(surface, slot, (5, 21, 25), (31, 63, 67), 14, 1)
-            self._draw_icon(surface, item, (int(slot.x + 34), slot.centery), 12, pygame)
-            draw_text(surface, label.upper(), 12, (slot.x + 58, slot.centery - 5),
-                      (247, 249, 249), align="midleft", bold=True)
-            draw_text(surface, f"TARGET // 0{i + 1}", 9, (slot.x + 58, slot.centery + 12),
-                      (91, 255, 210), align="midleft", mono=True)
+            self._draw_icon(surface, item, (int(slot.right - 34), slot.centery), 12, pygame)
+            draw_text(surface, label.upper(), 12, (slot.right - 58, slot.centery - 5),
+                      (247, 249, 249), align="midright", bold=True)
+            draw_text(surface, f"TARGET // 0{i + 1}", 9, (slot.right - 58, slot.centery + 12),
+                      (91, 255, 210), align="midright", mono=True)
 
         maze_panel = pygame.Rect(left_x, 272, left_w, height - 334)
         rounded_panel(surface, maze_panel, (3, 11, 15, 245), (43, 100, 100), 22, 2)

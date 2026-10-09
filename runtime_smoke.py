@@ -30,6 +30,9 @@ def run():
                 "Hebrew text is not reordered for Pygame rendering")
         require(main._display_text("קוד 8421") == "8421 דוק",
                 f"mixed Hebrew/digit text has incorrect visual order: {main._display_text('קוד 8421')}")
+        fitted_hebrew = main.fit_text("שם שחקן ארוך במיוחד לבדיקה", 18, 120, bold=True)
+        require(main._render_text(fitted_hebrew, 18, (235, 245, 247), False, True).get_width() <= 120,
+                "player-name ellipsis still spills outside its available width")
         require(main._scanline_layer((80, 60), 5, 16) is main._scanline_layer((80, 60), 5, 16),
                 "scanline overlay was not cached between frames")
         require(main._scan_beam_layer(80, 90) is main._scan_beam_layer(80, 90),
@@ -108,6 +111,28 @@ def run():
             pygame, main.WIDTH, main.HEIGHT
         )
         require(app.stage_manager.stage == 8, "correct purple server node did not unlock stage 8")
+
+        # All ten registered players, including long Hebrew names, should fit above buttons.
+        app.players = [
+            main.Player("שחקן מתאמן ארוך במיוחד", Path("unused-player-image.png"))
+            for _ in range(10)
+        ]
+        app.player_name = ""
+        app.stage_manager.draw_stage_2(main.screen)
+        pygame.display.flip()
+        require(len(app.players) == 10, "roster render changed the registered-player count")
+
+        # Player-name input must have a hard limit so it cannot overflow the field.
+        app.player_name = ""
+        for _ in range(26):
+            app.handle_roster_event(pygame.event.Event(
+                pygame.KEYDOWN, {"key": pygame.K_a, "unicode": "A"}
+            ))
+        require(len(app.player_name) == 24, f"player-name limit not enforced: {len(app.player_name)}")
+        require(bool(app.roster_error), "player-name limit did not show feedback")
+        app.player_name = ""
+        app.roster_error = ""
+        app.players = []
 
         panel_probe = pygame.Surface((80, 50))
         panel_probe.fill((0, 0, 0))

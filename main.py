@@ -130,6 +130,23 @@ def _render_text(text: str, size: int, color: tuple, mono: bool, bold: bool):
     return font(size, mono=mono, bold=bold).render(_display_text(text), True, color)
 
 
+def fit_text(text: str, size: int, max_width: int, *, mono=False, bold=False) -> str:
+    """Ellipsize a label without allowing player names to spill into adjacent UI."""
+    value = str(text)
+    max_width = max(0, int(max_width))
+    if not value or max_width == 0:
+        return ""
+    ink = (235, 245, 247)
+    if _render_text(value, int(size), ink, mono, bold).get_width() <= max_width:
+        return value
+    while value:
+        value = value[:-1].rstrip()
+        candidate = value + "…"
+        if _render_text(candidate, int(size), ink, mono, bold).get_width() <= max_width:
+            return candidate
+    return "…"
+
+
 def clamp(value, low, high):
     return max(low, min(high, value))
 
@@ -923,18 +940,22 @@ class StageManager:
         draw_text(surface, "THE ROSTER", 17, (panel.centerx, panel.y + 25),
                   (90, 255, 218), align="center", mono=True, bold=True)
 
-        for idx, p in enumerate(self.app.players):
-            y = panel.y + 72 + idx * 48
-            pygame.draw.circle(surface, (72, 255, 210), (panel.x + 30, y), 6)
-            draw_text(surface, f"{idx + 1:02d}", 12, (panel.x + 50, y),
+        # Ten players must fit above the two action buttons without overlapping.
+        for idx, p in enumerate(self.app.players[:10]):
+            y = panel.y + 60 + idx * 30
+            pygame.draw.line(surface, (20, 45, 50),
+                             (panel.x + 14, y + 14), (panel.right - 14, y + 14), 1)
+            pygame.draw.circle(surface, (72, 255, 210), (panel.x + 14, y), 4)
+            draw_text(surface, f"{idx + 1:02d}", 10, (panel.x + 26, y),
                       (100, 130, 135), align="midleft", mono=True)
+            name_text = fit_text(p.name, 14, panel.w - 162, bold=True)
             if is_rtl_text(p.name):
-                draw_text(surface, p.name, 18, (panel.right - 126, y),
+                draw_text(surface, name_text, 14, (panel.right - 108, y),
                           (235, 245, 247), align="midright", bold=True)
             else:
-                draw_text(surface, p.name, 18, (panel.x + 80, y),
+                draw_text(surface, name_text, 14, (panel.x + 45, y),
                           (235, 245, 247), align="midleft", bold=True)
-            draw_text(surface, "DNA SECURED", 11, (panel.right - 25, y),
+            draw_text(surface, "DNA OK", 9, (panel.right - 13, y),
                       (70, 255, 190), align="midright", mono=True)
 
         input_rect = pygame.Rect(WIDTH * 0.10, HEIGHT * 0.82, WIDTH * 0.52, 58)
@@ -950,7 +971,7 @@ class StageManager:
                       align="midleft")
 
         Button((panel.x + 20, panel.bottom - 118, panel.w - 40, 52),
-               "💾  סרוק ושמור DNA", (57, 255, 202)).draw(surface)
+               "סרוק ושמור DNA", (57, 255, 202)).draw(surface)
         Button((panel.x + 20, panel.bottom - 55, panel.w - 40, 42),
                "סיום הרשמה ונעילת פרופיל", (255, 194, 70)).draw(surface)
 
@@ -1348,11 +1369,16 @@ class EscapeRoomApp:
                 self.running = False
             elif event.key == pygame.K_BACKSPACE:
                 self.player_name = self.player_name[:-1]
+                self.roster_error = ""
             elif event.key == pygame.K_RETURN and self.player_name.strip():
                 self.try_register()
             else:
                 if len(event.unicode) == 1 and event.unicode.isprintable():
-                    self.player_name += event.unicode
+                    if len(self.player_name) < 24:
+                        self.player_name += event.unicode
+                        self.roster_error = ""
+                    else:
+                        self.roster_error = "השם מוגבל ל־24 תווים."
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             # Cards on the right
