@@ -16,8 +16,17 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Compile all Python sources
-        run: python -m py_compile main.py stage4_puzzle.py stage5_tasks.py stage6_protocol.py stage7_server_cipher.py later_stages.py puzzle_checks.py
+      - name: Install GUI runtime dependencies
+        run: python -m pip install pygame-ce opencv-python numpy
 
-      - name: Run fixed-value puzzle checks
+      - name: Compile all Python sources
+        run: python -m py_compile main.py stage4_puzzle.py stage5_tasks.py stage6_protocol.py stage7_server_cipher.py later_stages.py puzzle_checks.py runtime_smoke.py
+
+      - name: Run fixed-value and maze puzzle checks
         run: python puzzle_checks.py
+
+      - name: Run headless runtime smoke test
+        env:
+          SDL_VIDEODRIVER: dummy
+          SDL_AUDIODRIVER: dummy
+        run: python runtime_smoke.py
