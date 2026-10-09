@@ -36,7 +36,11 @@ pygame.init()
 pygame.font.init()
 pygame.mixer.init()
 
-screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN | pygame.SCALED)
+try:
+    screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN | pygame.SCALED)
+except pygame.error:
+    # Headless environments and unusual display drivers may not support a zero-sized scaled fullscreen mode.
+    screen = pygame.display.set_mode((1280, 720))
 WIDTH, HEIGHT = screen.get_size()
 pygame.display.set_caption("היוונים חוזרים — Antiochus 2.0")
 pygame.mouse.set_visible(True)
