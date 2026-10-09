@@ -1,0 +1,74 @@
+name: Build Windows Portable App
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+    paths:
+      - "*.py"
+      - "requirements.txt"
+      - ".github/workflows/build-windows.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install game and packaging dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pyinstaller
+
+      - name: Build portable Windows folder
+        run: >
+          python -m PyInstaller
+          --noconfirm
+          --clean
+          --windowed
+          --name TheGreeksAreBack
+          --collect-all cv2
+          --collect-all pygame
+          --collect-all sounddevice
+          --collect-all numpy
+          --hidden-import pygame.sndarray
+          main.py
+
+      - name: Add launch helper and instructions
+        shell: pwsh
+        run: |
+          @'
+          THE GREEKS ARE BACK - WINDOWS BUILD
+
+          1. Keep this folder intact after extraction.
+          2. Double-click StartGame.bat or TheGreeksAreBack.exe.
+          3. The first launch creates a data folder next to the executable.
+          4. Webcam access is needed for registration and face-check stages.
+          5. Microphone access is optional; the finale still progresses if it is unavailable.
+
+          Emergency exit: Ctrl + Alt + Shift + Esc.
+          '@ | Set-Content -Path "dist/TheGreeksAreBack/HOW_TO_RUN.txt" -Encoding utf8
+
+          @'
+          @echo off
+          cd /d "%~dp0"
+          start "" "%~dp0TheGreeksAreBack.exe"
+          '@ | Set-Content -Path "dist/TheGreeksAreBack/StartGame.bat" -Encoding ascii
+
+      - name: Upload portable app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TheGreeksAreBack-Windows-x64
+          path: dist/TheGreeksAreBack
+          if-no-files-found: error
+          retention-days: 14
