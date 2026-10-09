@@ -1,6 +1,7 @@
 """Deterministic checks for fixed-value puzzles and the generated stage-four maze."""
 
 from collections import Counter
+import random
 
 import pygame
 
@@ -32,43 +33,54 @@ def check_stage_4():
     class DummyApp:
         pass
 
-    puzzle = Stage4Controller(DummyApp())
-    puzzle.app.setup_puzzle_locations = ["", "מאחורי הווילון", "", "במגירת המטבח"]
-    assert puzzle._configured_locations() == [
-        (2, "מאחורי הווילון"),
-        (4, "במגירת המטבח"),
-    ]
-    assert puzzle.path[0] == puzzle.start_cell
-    assert puzzle.path[-1] == puzzle.finish_cell
-    assert all(puzzle.maze[y][x] == 0 for x, y in puzzle.path)
-    indices = [puzzle.path.index(puzzle.target_cells[name]) for name in puzzle.TARGETS]
-    assert indices == sorted(indices) and len(set(indices)) == 3
-    exit_numbers = [number for _, number in puzzle.exits]
-    assert exit_numbers.count(15) == 1
-    assert len(exit_numbers) == len(set(exit_numbers))
-    assert not set(puzzle.TARGETS).intersection(set(puzzle.decoy_items.values()))
+    # The maze is randomized at every launch; test multiple layouts so the 15
+    # exit remains the only one whose route passes through all three target items.
+    original_random_state = random.getstate()
+    try:
+        for seed in range(25):
+            random.seed(seed)
+            puzzle = Stage4Controller(DummyApp())
+            puzzle.app.setup_puzzle_locations = ["", "מאחורי הווילון", "", "במגירת המטבח"]
+            assert puzzle._configured_locations() == [
+                (2, "מאחורי הווילון"),
+                (4, "במגירת המטבח"),
+            ]
+            assert puzzle.path[0] == puzzle.start_cell
+            assert puzzle.path[-1] == puzzle.finish_cell
+            assert all(puzzle.maze[y][x] == 0 for x, y in puzzle.path)
+            indices = [puzzle.path.index(puzzle.target_cells[name]) for name in puzzle.TARGETS]
+            assert indices == sorted(indices) and len(set(indices)) == 3
 
-    # No other numbered exit may share the complete three-symbol route to 15.
-    parent = {puzzle.start_cell: None}
-    queue = [puzzle.start_cell]
-    while queue:
-        x, y = queue.pop(0)
-        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-            nxt = (x + dx, y + dy)
-            if (0 <= nxt[0] < len(puzzle.maze[0]) and
-                0 <= nxt[1] < len(puzzle.maze) and
-                puzzle.maze[nxt[1]][nxt[0]] == 0 and nxt not in parent):
-                parent[nxt] = (x, y)
-                queue.append(nxt)
+            exit_numbers = [number for _, number in puzzle.exits]
+            assert exit_numbers.count(15) == 1
+            assert len(exit_numbers) == len(set(exit_numbers))
+            assert len(exit_numbers) >= 8, f"seed {seed}: maze should present multiple exits"
+            assert not set(puzzle.TARGETS).intersection(set(puzzle.decoy_items.values()))
 
-    target_cells = set(puzzle.target_cells.values())
-    for exit_cell, number in puzzle.exits:
-        trail = set()
-        cell = exit_cell
-        while cell is not None:
-            trail.add(cell)
-            cell = parent[cell]
-        assert target_cells.issubset(trail) == (number == 15)
+            parent = {puzzle.start_cell: None}
+            queue = [puzzle.start_cell]
+            while queue:
+                x, y = queue.pop(0)
+                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    nxt = (x + dx, y + dy)
+                    if (0 <= nxt[0] < len(puzzle.maze[0]) and
+                        0 <= nxt[1] < len(puzzle.maze) and
+                        puzzle.maze[nxt[1]][nxt[0]] == 0 and nxt not in parent):
+                        parent[nxt] = (x, y)
+                        queue.append(nxt)
+
+            target_cells = set(puzzle.target_cells.values())
+            for exit_cell, number in puzzle.exits:
+                trail = set()
+                cell = exit_cell
+                while cell is not None:
+                    trail.add(cell)
+                    cell = parent[cell]
+                assert target_cells.issubset(trail) == (number == 15), (
+                    f"seed {seed}: exit {number} violates the unique target-route rule"
+                )
+    finally:
+        random.setstate(original_random_state)
 
 
 def check_stage_6():
