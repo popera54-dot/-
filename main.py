@@ -1015,7 +1015,9 @@ class AudioDirector:
                 channel = getattr(later, "music_channel", None)
                 if channel is not None:
                     try:
-                        channel.set_volume(0.28 * self.master_volume)
+                        # The music Sound already carries its own mix level; Channel volume
+                        # is reserved for the master control so volume does not get multiplied twice.
+                        channel.set_volume(self.master_volume)
                     except pygame.error:
                         pass
 
