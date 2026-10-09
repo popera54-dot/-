@@ -128,7 +128,11 @@ class FirewallMazeTask(TaskBase):
             elif event.key == pygame.K_DOWN:
                 dy = 1
             nx, ny = self.player[0] + dx, self.player[1] + dy
-            if self.grid[ny][nx] != "#":
+            # Validate both axes before indexing. The grid normally has wall
+            # borders, but malformed states or future map edits must not crash.
+            if (0 <= ny < len(self.grid)
+                    and 0 <= nx < len(self.grid[ny])
+                    and self.grid[ny][nx] != "#"):
                 self.player = [nx, ny]
                 if self.grid[ny][nx] == "E":
                     self.done = True

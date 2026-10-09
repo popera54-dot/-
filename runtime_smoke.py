@@ -1,13 +1,15 @@
 """Headless runtime smoke test for stage rendering and transitions."""
 import os
+import tempfile
 import time
+from pathlib import Path
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
 import pygame
 import main
-from stage5_tasks import CyberMemoryTask, DreidelSaysTask, MissingLetterTask, OilCatchTask, SymbolMatrixTask, TriviaTask
+from stage5_tasks import CyberMemoryTask, DreidelSaysTask, FirewallMazeTask, MissingLetterTask, OilCatchTask, SymbolMatrixTask, TriviaTask
 
 
 def require(condition, message):
@@ -34,6 +36,78 @@ def run():
                 "scan beam surface was not cached between frames")
         require(main._glow_layer(12, (50, 220, 180), 13) is main._glow_layer(12, (50, 220, 180), 13),
                 "glow surface was not cached between frames")
+
+        # Registration must fail safely when OpenCV cannot write a face template,
+        # and must register only after a real image has been saved and read back.
+        old_player_dir = main.PLAYER_DIR
+        old_capture_face = app.webcam.capture_face
+        original_imwrite = main.cv2.imwrite
+        try:
+            with tempfile.TemporaryDirectory() as temporary_dir:
+                main.PLAYER_DIR = Path(temporary_dir)
+                app.players = []
+                app.player_name = "Smoke Player"
+                app.webcam.capture_face = lambda: main.np.zeros((24, 24, 3), dtype=main.np.uint8)
+                main.cv2.imwrite = lambda path, image: False
+                app.try_register()
+                require(not app.players, "registration created a player after a failed image write")
+                require(bool(app.roster_error), "failed registration did not show an error")
+                require(not (Path(temporary_dir) / "player_01.pending.png").exists(),
+                        "failed registration left a temporary face image")
+                main.cv2.imwrite = original_imwrite
+                app.try_register()
+                require(len(app.players) == 1, "registration did not recover after image-write failure")
+                require(app.players[0].image_path.exists(), "registered face image was not moved into place")
+                require(app.players[0].load() is not None, "registered face image cannot be read back")
+                app.players = []
+                app.player_name = ""
+        finally:
+            main.PLAYER_DIR = old_player_dir
+            app.webcam.capture_face = old_capture_face
+            main.cv2.imwrite = original_imwrite
+
+        # Firewall movement at the outer edge must be ignored rather than indexing outside the grid.
+        maze_task = FirewallMazeTask()
+        maze_task.player = [0, 0]
+        for key in (pygame.K_LEFT, pygame.K_UP):
+            maze_task.handle(
+                pygame.event.Event(pygame.KEYDOWN, {"key": key, "unicode": ""}),
+                pygame, main.WIDTH, main.HEIGHT
+            )
+        require(maze_task.player == [0, 0],
+                f"firewall maze moved beyond a boundary: {maze_task.player}")
+
+        # The server clue advances only through its visible button, not arbitrary clicks.
+        server_stage = app.stage_manager.stage7
+        server_stage.start()
+        server_stage.handle(
+            pygame.event.Event(pygame.MOUSEBUTTONDOWN, {"button": 1, "pos": (30, 30)}),
+            pygame, main.WIDTH, main.HEIGHT
+        )
+        require(server_stage.phase == "clue", "random click bypassed the stage 7 physical clue")
+        server_start = (main.WIDTH // 2, 643)
+        server_stage.handle(
+            pygame.event.Event(pygame.MOUSEBUTTONDOWN, {"button": 1, "pos": server_start}),
+            pygame, main.WIDTH, main.HEIGHT
+        )
+        require(server_stage.phase == "select",
+                "visible stage 7 start button did not continue when no face roster was required")
+        wrong_node = (main.WIDTH // 2 - 420 + 90, 390 + 75)
+        server_stage.handle(
+            pygame.event.Event(pygame.MOUSEBUTTONDOWN, {"button": 1, "pos": wrong_node}),
+            pygame, main.WIDTH, main.HEIGHT
+        )
+        require(server_stage.phase == "clue", "wrong server node did not restart stage 7")
+        server_stage.handle(
+            pygame.event.Event(pygame.MOUSEBUTTONDOWN, {"button": 1, "pos": server_start}),
+            pygame, main.WIDTH, main.HEIGHT
+        )
+        purple_node = (main.WIDTH // 2 - 420 + 90, 580 + 75)
+        server_stage.handle(
+            pygame.event.Event(pygame.MOUSEBUTTONDOWN, {"button": 1, "pos": purple_node}),
+            pygame, main.WIDTH, main.HEIGHT
+        )
+        require(app.stage_manager.stage == 8, "correct purple server node did not unlock stage 8")
 
         panel_probe = pygame.Surface((80, 50))
         panel_probe.fill((0, 0, 0))

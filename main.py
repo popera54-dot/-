@@ -1381,8 +1381,25 @@ class EscapeRoomApp:
             self.roster_error = "לא זוהו פנים במצלמה. התקרבו מעט למסגרת."
             return
 
+        # Write a temporary image first. Only register the player after the file is
+        # readable and can be moved into place; failed writes must not create a dead profile.
         filename = PLAYER_DIR / f"player_{len(self.players) + 1:02d}.png"
-        cv2.imwrite(str(filename), face)
+        pending_filename = PLAYER_DIR / f"player_{len(self.players) + 1:02d}.pending.png"
+        try:
+            PLAYER_DIR.mkdir(parents=True, exist_ok=True)
+            if not cv2.imwrite(str(pending_filename), face):
+                raise OSError("OpenCV returned False while saving the face image.")
+            if cv2.imread(str(pending_filename)) is None:
+                raise OSError("The saved face image could not be read back.")
+            pending_filename.replace(filename)
+        except (cv2.error, OSError):
+            try:
+                pending_filename.unlink(missing_ok=True)
+            except OSError:
+                pass
+            self.roster_error = "לא ניתן לשמור את תמונת הרישום. בדקו הרשאות בתיקיית המשחק."
+            return
+
         self.players.append(Player(name, filename))
         self.player_name = ""
         self.roster_error = ""

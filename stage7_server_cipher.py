@@ -66,7 +66,11 @@ class Stage7Controller:
             return
 
         if self.phase == "clue":
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            # Match the visible "find server" button. Clicking anywhere else on
+            # the clue screen must not silently skip the physical puzzle.
+            start_button = pygame.Rect(width / 2 - 190, 610, 380, 66)
+            if (event.type == pygame.MOUSEBUTTONDOWN and event.button == 1
+                    and start_button.collidepoint(event.pos)):
                 self.begin_verification()
 
         elif self.phase == "verify":
