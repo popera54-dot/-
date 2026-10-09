@@ -771,16 +771,25 @@ class StageManager:
         pulse = (math.sin(elapsed * 4.8) + 1) * 0.5
         self.app.background.draw(surface, danger=min(1.0, elapsed / 2.5))
 
-        # Fake error windows
+        # Hostile terminal shards: dark error panels instead of bright, office-like popups.
         if elapsed < 2.9:
-            for i in range(17):
+            for i in range(13):
                 x = int((i * 173 + elapsed * (30 + i * 8)) % (WIDTH - 280))
                 y = int((i * 59 + abs(math.sin(elapsed * 5 + i)) * 300) % (HEIGHT - 90))
                 rect = pygame.Rect(x, y, 260, 64)
-                pygame.draw.rect(surface, (222, 234, 238), rect)
-                draw_text(surface, "SYSTEM FAILURE", 12, (x + 12, y + 10), (24, 33, 38), mono=True, bold=True)
-                draw_text(surface, "0x" + format((i * 917 + int(elapsed * 99)) % 65535, "04X"),
-                          11, (x + 12, y + 33), (130, 32, 42), mono=True)
+                pulse_red = 130 + int(90 * (0.5 + 0.5 * math.sin(elapsed * 9 + i)))
+                rounded_panel(surface, rect, (3, 7, 12, 246),
+                              (pulse_red, 24, 43), 9, 1)
+                pygame.draw.line(surface, (255, 43, 64),
+                                 (rect.x + 10, rect.y + 31),
+                                 (rect.right - 10, rect.y + 31), 1)
+                draw_text(surface, "KERNEL PANIC // ACCESS LOST", 10,
+                          (x + 12, y + 10), (255, 70, 87), mono=True, bold=True)
+                draw_text(surface, "TRACE 0x" + format((i * 917 + int(elapsed * 99)) % 65535, "04X"),
+                          11, (x + 12, y + 43), (155, 180, 184), mono=True)
+                # Short glitch bar changes position every frame, like a corrupted signal.
+                glitch_x = rect.x + 150 + ((int(elapsed * 370) + i * 19) % 78)
+                pygame.draw.rect(surface, (255, 40, 61), (glitch_x, rect.y + 37, 18, 3))
 
         # Live hacker terminal status strip.
         status_y = 112
@@ -1066,6 +1075,9 @@ class EscapeRoomApp:
                   (255, 58, 82), mono=True, bold=True)
         draw_text(surface, ">>> SYSTEM WAITING FOR OPERATOR COMMAND", 11, (WIDTH - 520, 76),
                   (41, 180, 126), mono=True)
+        pygame.draw.line(surface, (255, 42, 62), (70, 206), (720, 206), 2)
+        draw_text(surface, "THREAT CLASS // HOSTILE  |  TRACE STATUS // ACTIVE",
+                  11, (70, 218), (255, 72, 88), mono=True, bold=True)
 
         # Large hero composition
         art = pygame.Rect(WIDTH - 520, 80, 390, 470)

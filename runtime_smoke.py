@@ -104,8 +104,18 @@ def run():
                 f"stage 6 flashlight left UI text visible outside its beam: {corner}")
         pygame.mouse.set_pos((main.WIDTH // 2, main.HEIGHT // 2))
 
-        # Render every implemented stage at least once in a headless SDL surface.
-        for stage in (4, 8, 9, 10, 11, 12):
+        # Render the operator console and all twelve actual game stages, not just later-stage screens.
+        app.setup_puzzle_locations = ["מאחורי הווילון", "במגירת המטבח"]
+        app.state = "setup"
+        app.operator_setup(main.screen)
+        pygame.display.flip()
+        app.players = [main.Player("בדיקת שחקן", main.PLAYER_DIR / "smoke-player.png")]
+        app.state = "game"
+        app.stage_manager.goto(1)
+        app.stage_started_at = time.monotonic() - 5.0  # Include the hostile-silhouette reveal.
+        app.stage_manager.draw(main.screen)
+        pygame.display.flip()
+        for stage in range(2, 13):
             app.stage_manager.goto(stage)
             app.stage_manager.draw(main.screen)
             pygame.display.flip()
