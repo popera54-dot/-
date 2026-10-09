@@ -462,18 +462,33 @@ def run():
         # Verified stage clears award XP and a rapid clear receives a speed bonus.
         app.stage_manager.goto(3)
         app.stage_message = "FIREWALL 01 COLLAPSED"
-        app.stage_started_at = time.monotonic() - 30.0
+        app.stage_started_at = time.monotonic() - 20.0
         xp_before = app.mission_xp
         clears_before = app.stages_cleared
         app.stage_manager.goto(4)
-        require(app.mission_xp - xp_before == 200,
-                "30-second clear did not award the expected 200 XP")
+        require(app.mission_xp - xp_before == 203,
+                "20-second clear did not award the expected 203 XP")
         require(app.stages_cleared == clears_before + 1,
                 "successful clear was not counted")
         require(app.last_cleared_stage == 3 and app.last_score_gain == 200,
                 "clear feedback did not store stage and score")
 
-                print("HEADLESS RUNTIME SMOKE TEST PASSED")
+        # Repeating the same bad code should still produce a new error cue and count.
+        app.stage_manager.goto(3)
+        app.stage_manager.later.lifeline_active = False
+        app.cipher_digits.clear()
+        app.stage_message = ""
+        mistakes_before = app.mistakes
+        for _attempt in range(2):
+            for digit in "1111":
+                app.handle_game_event(pygame.event.Event(
+                    pygame.KEYDOWN,
+                    {"key": pygame.K_1, "unicode": digit, "mod": 0}
+                ))
+        require(app.mistakes == mistakes_before + 2,
+                "repeated identical rejected codes were not counted separately")
+
+        print("HEADLESS RUNTIME SMOKE TEST PASSED")
     finally:
         app.stage_manager.later._stop_mic()
         app.webcam.release()
