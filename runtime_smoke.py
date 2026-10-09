@@ -33,6 +33,23 @@ def run():
         require(center_alpha < middle_alpha < outside_alpha,
                 f"stage 6 flashlight gradient is reversed: {center_alpha}, {middle_alpha}, {outside_alpha}")
 
+        # Verify the flashlight darkens UI content too, not just the background.
+        app.stage_manager.stage6.start()
+        test_surface = pygame.Surface((main.WIDTH, main.HEIGHT))
+        pygame.mouse.set_pos((main.WIDTH // 2, main.HEIGHT // 2))
+        def mark_drawn_text(target, *args, **kwargs):
+            main.draw_text(target, *args, **kwargs)
+            pygame.draw.rect(target, (255, 255, 255), (8, 8, 12, 12))
+        app.stage_manager.stage6.draw(
+            test_surface, mark_drawn_text, main.rounded_panel,
+            main.glow_circle, pygame, main.WIDTH, main.HEIGHT,
+            app.background.time
+        )
+        corner = test_surface.get_at((12, 12))
+        require(max(corner.r, corner.g, corner.b) < 30,
+                f"stage 6 flashlight left UI text visible outside its beam: {corner}")
+        pygame.mouse.set_pos((main.WIDTH // 2, main.HEIGHT // 2))
+
         # Render every implemented stage at least once in a headless SDL surface.
         for stage in (4, 8, 9, 10, 11, 12):
             app.stage_manager.goto(stage)
