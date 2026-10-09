@@ -4,6 +4,7 @@ import json
 import math
 import os
 import random
+import re
 import sys
 import time
 from dataclasses import dataclass
@@ -40,13 +41,21 @@ PLAYER_DIR.mkdir(exist_ok=True)
 
 pygame.init()
 pygame.font.init()
-pygame.mixer.init()
-
 try:
-    screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN | pygame.SCALED)
+    pygame.mixer.init()
 except pygame.error:
-    # Headless environments and unusual display drivers may not support a zero-sized scaled fullscreen mode.
-    screen = pygame.display.set_mode((1280, 720))
+    # Sound is optional; later-stage sound generation already degrades gracefully.
+    pass
+
+# Use one logical canvas across every monitor. Pygame scales these coordinates
+# to the display, preventing text, puzzles, and click targets from drifting.
+try:
+    screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN | pygame.SCALED)
+except pygame.error:
+    try:
+        screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.SCALED)
+    except pygame.error:
+        screen = pygame.display.set_mode((WIDTH, HEIGHT))
 WIDTH, HEIGHT = screen.get_size()
 pygame.display.set_caption("היוונים חוזרים — Antiochus 2.0")
 pygame.mouse.set_visible(True)
@@ -54,6 +63,31 @@ pygame.mouse.set_visible(True)
 FONT_NAME = pygame.font.match_font("segoeui") or pygame.font.get_default_font()
 MONO_NAME = pygame.font.match_font("consolas") or pygame.font.get_default_font()
 BOLD_NAME = pygame.font.match_font("segoeuib") or FONT_NAME
+
+
+try:
+    from bidi.algorithm import get_display as _bidi_get_display
+except ImportError:
+    _bidi_get_display = None
+
+_HEBREW_RE = re.compile(r"[\u0590-\u05FF\uFB1D-\uFB4F]")
+
+
+def is_rtl_text(text: str) -> bool:
+    """Return True when a string contains Hebrew/RTL characters."""
+    return bool(_HEBREW_RE.search(str(text)))
+
+
+def _display_text(text: str) -> str:
+    """Reorder mixed Hebrew/Latin text for Pygame's left-to-right text renderer."""
+    text = str(text)
+    if _bidi_get_display is None or not is_rtl_text(text):
+        return text
+    try:
+        return _bidi_get_display(text)
+    except (AssertionError, TypeError, ValueError):
+        # Malformed user text must never crash the UI.
+        return text
 
 
 @lru_cache(maxsize=96)
@@ -65,7 +99,8 @@ def font(size: int, mono: bool = False, bold: bool = False) -> pygame.font.Font:
 @lru_cache(maxsize=4096)
 def _render_text(text: str, size: int, color: tuple, mono: bool, bold: bool):
     # Pygame surfaces are safe to reuse as immutable blit sources.
-    return font(size, mono=mono, bold=bold).render(text, True, color)
+    # All screens share this BiDi pass so Hebrew and embedded numbers render consistently.
+    return font(size, mono=mono, bold=bold).render(_display_text(text), True, color)
 
 
 def clamp(value, low, high):
@@ -83,9 +118,31 @@ def draw_text(surface, text, size, pos, color=(235, 245, 255),
 
 
 def rounded_panel(surface, rect, fill, border=(70, 255, 210), radius=24, width=1):
-    pygame.draw.rect(surface, fill, rect, border_radius=radius)
+    """Draw a tactical frame with clipped corners instead of a soft rounded card."""
+    r = pygame.Rect(rect)
+    if r.w <= 4 or r.h <= 4:
+        pygame.draw.rect(surface, fill, r)
+        if width:
+            pygame.draw.rect(surface, border, r, width)
+        return
+    cut = min(max(5, int(radius * 0.72)), max(2, min(r.w, r.h) // 3))
+    points = [
+        (r.left + cut, r.top),
+        (r.right - cut - 1, r.top),
+        (r.right - 1, r.top + cut),
+        (r.right - 1, r.bottom - cut - 1),
+        (r.right - cut - 1, r.bottom - 1),
+        (r.left + cut, r.bottom - 1),
+        (r.left, r.bottom - cut - 1),
+        (r.left, r.top + cut),
+    ]
+    pygame.draw.polygon(surface, fill, points)
     if width:
-        pygame.draw.rect(surface, border, rect, width, border_radius=radius)
+        pygame.draw.polygon(surface, border, points, width)
+        rail_end = min(r.right - cut - 3, r.left + cut + max(18, min(64, r.w // 4)))
+        if rail_end > r.left + cut + 3:
+            pygame.draw.line(surface, border, (r.left + cut + 3, r.top + 1),
+                             (rail_end, r.top + 1), max(1, width))
 
 
 def glow_circle(surface, pos, radius, color, alpha=45):
@@ -357,9 +414,15 @@ class Button:
         self.update()
         fill = (10, 22, 29) if not self.hover else (12, 34, 39)
         border = tuple(clamp(c + (35 if self.hover else 0), 0, 255) for c in self.accent)
-        rounded_panel(surface, self.rect, fill, border, 14, 2)
+        rounded_panel(surface, self.rect, fill, border, 11, 2)
+        cut = min(13, max(7, self.rect.h // 5))
+        pygame.draw.line(surface, self.accent,
+                         (self.rect.left + 7, self.rect.top + cut),
+                         (self.rect.left + 7, self.rect.bottom - cut), 2)
         if self.hover:
-            glow_circle(surface, self.rect.center, 20, self.accent, 13)
+            pygame.draw.line(surface, self.accent,
+                             (self.rect.left + 18, self.rect.top + 7),
+                             (self.rect.right - 18, self.rect.top + 7), 2)
         draw_text(surface, self.label, 22, self.rect.center, (235, 255, 250),
                   align="center", bold=True)
         if self.subtitle:
@@ -731,24 +794,32 @@ class StageManager:
     def draw_hacker(self, surface, center, radius, pulse):
         cx, cy = center
         glow_circle(surface, center, radius + 50, (255, 44, 58), 13)
-        # cloak
-        pygame.draw.ellipse(surface, (15, 18, 24), (cx - 122, cy + 30, 244, 180))
-        # helmet / face
-        pygame.draw.circle(surface, (34, 40, 48), (cx, cy - 20), radius - 22)
-        pygame.draw.arc(surface, (116, 136, 145),
-                        (cx - radius + 10, cy - radius + 15, (radius - 10) * 2, (radius - 10) * 2),
-                        math.radians(200), math.radians(340), 4)
-        # neon visor
-        visor = pygame.Rect(cx - 82, cy - 42, 164, 40)
-        pygame.draw.rect(surface, (6, 22, 22), visor, border_radius=12)
-        pygame.draw.line(surface, (51, 255, 198), (cx - 70, cy - 22), (cx + 70, cy - 22), 4)
+        # Angular armored silhouette: deliberately severe, not a soft cartoon face.
+        s = radius / 105.0
+        def p(x, y):
+            return (int(cx + x * s), int(cy + y * s))
+
+        cloak = [p(-118, 136), p(-101, 82), p(-69, 51), p(-43, 34),
+                 p(43, 34), p(69, 51), p(101, 82), p(118, 136)]
+        pygame.draw.polygon(surface, (11, 16, 22), cloak)
+        pygame.draw.lines(surface, (45, 74, 79), True, cloak, 2)
+
+        helmet = [p(-67, -67), p(-54, -98), p(-25, -119), p(31, -115),
+                  p(66, -82), p(68, 14), p(43, 42), p(-43, 42), p(-67, 14)]
+        pygame.draw.polygon(surface, (27, 34, 42), helmet)
+        pygame.draw.lines(surface, (102, 123, 130), True, helmet, 3)
+        visor = [p(-56, -40), p(49, -40), p(72, -15), p(-45, -15)]
+        pygame.draw.polygon(surface, (3, 18, 20), visor)
+        pygame.draw.lines(surface, (47, 255, 197), True, visor, 2)
+        pygame.draw.line(surface, (51, 255, 198), p(-44, -28), p(59, -28), 3)
         for i in range(7):
-            xx = cx - 65 + i * 22
-            pygame.draw.circle(surface, (76, 255, 202), (xx, cy - 22), 3 + int(pulse * 2))
-        # Greek key motif
+            xx = int(cx + (-38 + i * 13) * s)
+            yy = int(cy - 28 * s)
+            pygame.draw.line(surface, (76, 255, 202), (xx, yy - int(4 * s)),
+                             (xx, yy + int(4 * s)), 2)
         for dx in (-1, 1):
-            x = cx + dx * 104
-            pygame.draw.line(surface, (221, 180, 91), (x, cy + 15), (x + dx * 18, cy + 33), 3)
+            a, b, c = p(dx * 91, 16), p(dx * 108, 31), p(dx * 91, 44)
+            pygame.draw.lines(surface, (221, 180, 91), False, [a, b, c], 3)
         draw_text(surface, "ΑΝΤΙΟΧΟΣ 2.0", 13, (cx, cy + 118), (210, 170, 90),
                   align="center", mono=True, bold=True)
 
@@ -792,17 +863,26 @@ class StageManager:
             pygame.draw.circle(surface, (72, 255, 210), (panel.x + 30, y), 6)
             draw_text(surface, f"{idx + 1:02d}", 12, (panel.x + 50, y),
                       (100, 130, 135), align="midleft", mono=True)
-            draw_text(surface, p.name, 18, (panel.x + 80, y),
-                      (235, 245, 247), align="midleft", bold=True)
+            if is_rtl_text(p.name):
+                draw_text(surface, p.name, 18, (panel.right - 126, y),
+                          (235, 245, 247), align="midright", bold=True)
+            else:
+                draw_text(surface, p.name, 18, (panel.x + 80, y),
+                          (235, 245, 247), align="midleft", bold=True)
             draw_text(surface, "DNA SECURED", 11, (panel.right - 25, y),
                       (70, 255, 190), align="midright", mono=True)
 
         input_rect = pygame.Rect(WIDTH * 0.10, HEIGHT * 0.82, WIDTH * 0.52, 58)
         rounded_panel(surface, input_rect, (5, 13, 18), (42, 83, 90), 14, 1)
-        draw_text(surface, self.app.player_name or "הזן שם מכבי…", 21,
-                  (input_rect.x + 18, input_rect.centery),
-                  (225, 240, 242) if self.app.player_name else (92, 116, 122),
-                  align="midleft")
+        entry_text = self.app.player_name or "הזן שם מכבי…"
+        if is_rtl_text(entry_text):
+            draw_text(surface, entry_text, 21, (input_rect.right - 18, input_rect.centery),
+                      (225, 240, 242) if self.app.player_name else (92, 116, 122),
+                      align="midright")
+        else:
+            draw_text(surface, entry_text, 21, (input_rect.x + 18, input_rect.centery),
+                      (225, 240, 242) if self.app.player_name else (92, 116, 122),
+                      align="midleft")
 
         Button((panel.x + 20, panel.bottom - 118, panel.w - 40, 52),
                "💾  סרוק ושמור DNA", (57, 255, 202)).draw(surface)
@@ -918,10 +998,10 @@ class EscapeRoomApp:
 
         self.setup_buttons = [
             Button((WIDTH * 0.18, HEIGHT * 0.86, WIDTH * 0.18, 62), "שמור הגדרות"),
-            Button((WIDTH * 0.41, HEIGHT * 0.86, WIDTH * 0.20, 62), "נעל מחשב והפעל משחק",
+            Button((WIDTH * 0.41, HEIGHT * 0.86, WIDTH * 0.20, 62), "הפעל משחק",
                    (255, 58, 82), "START // KIOSK"),
-            Button((WIDTH * 0.66, HEIGHT * 0.86, WIDTH * 0.16, 62), "מצב תצוגה",
-                   (120, 166, 255)),
+            Button((WIDTH * 0.66, HEIGHT * 0.86, WIDTH * 0.16, 62), "יציאה",
+                   (255, 58, 82)),
         ]
 
     def start_game(self):
@@ -947,7 +1027,8 @@ class EscapeRoomApp:
         # Hero header
         draw_text(surface, "THE GREEKS ARE BACK", 18, (70, 48), (75, 255, 211),
                   mono=True, bold=True)
-        draw_text(surface, "היוונים חוזרים", 62, (70, 105), (245, 249, 250), bold=True)
+        draw_text(surface, "היוונים חוזרים", 62, (720, 105), (245, 249, 250),
+                  align="topright", bold=True)
         draw_text(surface, "OPERATOR CONSOLE  /  PRE-GAME SETUP", 16, (74, 173),
                   (114, 145, 150), mono=True)
         draw_text(surface, "ROOT ACCESS // LOCAL TERMINAL", 12, (WIDTH - 520, 55),
@@ -1016,8 +1097,14 @@ class EscapeRoomApp:
         rounded_panel(surface, rr, (5, 16, 21, 245),
                       (255, 194, 78) if active else (32, 71, 78), 18, 2 if active else 1)
         draw_text(surface, label, 11, (x + 18, y + 17), (74, 255, 211), mono=True, bold=True)
-        shown = value if len(value) <= 62 else "..." + value[-59:]
-        draw_text(surface, shown, 17, (x + 18, y + 53), (224, 237, 239), align="midleft")
+        if len(value) <= 62:
+            shown = value
+        elif is_rtl_text(value):
+            shown = value[:59] + "…"
+        else:
+            shown = "…" + value[-59:]
+        draw_text(surface, shown, 17, (rr.right - 18, y + 53),
+                  (224, 237, 239), align="midright")
         if active:
             draw_text(surface, "EDITING // ENTER TO FINISH", 9, (rr.right - 14, rr.y + 15),
                       (255, 194, 78), align="topright", mono=True, bold=True)
@@ -1028,7 +1115,8 @@ class EscapeRoomApp:
         draw_text(surface, "STAGE 04  //  PHYSICAL PUZZLE PIECE LOCATIONS", 11,
                   (panel.x + 18, panel.y + 15), (74, 255, 211), mono=True, bold=True)
         draw_text(surface, "הוסף כמה חלקים שצריך. לחץ על שורה וכתוב את מקום המחבוא.",
-                  13, (panel.x + 18, panel.y + 38), (152, 176, 179))
+                  13, (panel.right - 18, panel.y + 38), (152, 176, 179),
+                  align="topright")
         visible = 3
         row_h = 36
         max_start = max(0, len(self.setup_puzzle_locations) - visible)
@@ -1042,13 +1130,13 @@ class EscapeRoomApp:
             active = idx == self.setup_active_piece
             rounded_panel(surface, rr, (7, 25, 30) if active else (5, 18, 23),
                           (255, 194, 78) if active else (31, 72, 77), 8, 2 if active else 1)
-            draw_text(surface, f"חלק {idx + 1:02d}", 11, (rr.x + 10, rr.centery),
-                      (255, 194, 78), align="midleft", mono=True, bold=True)
+            draw_text(surface, f"חלק {idx + 1:02d}", 11, (rr.x + 76, rr.centery),
+                      (255, 194, 78), align="midright", mono=True, bold=True)
             value = self.setup_puzzle_locations[idx] or "לחץ כאן והקלד מיקום…"
-            preview = value if len(value) <= 57 else value[:54] + "..."
-            draw_text(surface, preview, 13, (rr.x + 85, rr.centery),
+            preview = value if len(value) <= 57 else (value[:54] + "…" if is_rtl_text(value) else "…" + value[-54:])
+            draw_text(surface, preview, 13, (rr.right - 10, rr.centery),
                       (235, 243, 245) if self.setup_puzzle_locations[idx] else (93, 120, 124),
-                      align="midleft")
+                      align="midright")
             remove_rect = pygame.Rect(panel.right - 72, y, 52, 29)
             rounded_panel(surface, remove_rect, (18, 13, 18), (255, 71, 92), 8, 1)
             draw_text(surface, "×", 18, remove_rect.center, (255, 95, 112), align="center", bold=True)
@@ -1170,7 +1258,7 @@ class EscapeRoomApp:
             elif self.setup_buttons[1].rect.collidepoint(event.pos):
                 self.start_game()
             elif self.setup_buttons[2].rect.collidepoint(event.pos):
-                self.start_game()
+                self.running = False
 
     def handle_roster_event(self, event):
         if event.type == pygame.KEYDOWN:

@@ -22,6 +22,30 @@ def run():
     app.timer_frozen = None
 
     try:
+        require((main.WIDTH, main.HEIGHT) == (1600, 900),
+                f"logical UI canvas drifted from 1600x900: {main.WIDTH}x{main.HEIGHT}")
+        require(main._display_text("שלום") == "םולש",
+                "Hebrew text is not reordered for Pygame rendering")
+        require(main._display_text("קוד 8421") == "8421 דוק",
+                f"mixed Hebrew/digit text has incorrect visual order: {main._display_text('קוד 8421')}")
+
+        panel_probe = pygame.Surface((80, 50))
+        panel_probe.fill((0, 0, 0))
+        main.rounded_panel(panel_probe, pygame.Rect(10, 10, 60, 30),
+                           (40, 50, 60), (100, 200, 150), 12, 1)
+        require(panel_probe.get_at((10, 10))[:3] == (0, 0, 0),
+                "tactical panel unexpectedly has a rounded/square corner")
+        require(panel_probe.get_at((35, 25))[:3] == (40, 50, 60),
+                "tactical panel fill is missing")
+
+        app.state = "setup"
+        app.running = True
+        exit_button = app.setup_buttons[2].rect.center
+        app.handle_setup_event(pygame.event.Event(
+            pygame.MOUSEBUTTONDOWN, {"button": 1, "pos": exit_button}))
+        require(not app.running, "setup Exit button did not exit the app")
+        app.running = True
+        app.state = "game"
         # The flashlight must reveal its centre, with darkness increasing toward the edge.
         overlay = app.stage_manager.stage6.make_flashlight_overlay(
             320, 220, (160, 110), pygame, radius=90

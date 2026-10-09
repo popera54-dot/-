@@ -17,7 +17,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install GUI runtime dependencies
-        run: python -m pip install pygame-ce opencv-python numpy
+        run: python -m pip install pygame-ce opencv-python numpy python-bidi
 
       - name: Compile all Python sources
         run: python -m py_compile main.py stage4_puzzle.py stage5_tasks.py stage6_protocol.py stage7_server_cipher.py later_stages.py puzzle_checks.py runtime_smoke.py
