@@ -42,7 +42,7 @@ def run():
 
         # Test distinct procedural cues, non-silent buffers, global mute, and ambient lifecycle.
         expected_sounds = {"click", "confirm", "puzzle", "unlock", "transition",
-                           "error", "intrusion", "tick", "urgent_tick", "victory"}
+                           "error", "intrusion", "tick", "urgent_tick", "heartbeat", "victory"}
         if app.audio.available:
             require(expected_sounds.issubset(set(app.audio.sounds)),
                     f"audio palette is incomplete: {expected_sounds - set(app.audio.sounds)}")
@@ -55,8 +55,34 @@ def run():
         require(app.audio.toggle() == prior_audio_state, "audio toggle did not restore its state")
         app.audio.start_ambient()
         require(app.audio.ambient_requested, "ambient sound request was not retained")
+        require(app.audio.toggle_ambient() is False and not app.audio.ambient_requested,
+                "F7 ambient toggle did not turn the drone off")
+        require(app.audio.toggle_ambient() is True and app.audio.ambient_requested,
+                "F7 ambient toggle did not turn the drone on")
         app.audio.stop_ambient()
         require(not app.audio.ambient_requested, "ambient sound did not stop cleanly")
+
+        # Master volume stays within limits and returns precisely to the previous level.
+        original_volume = app.audio.master_volume
+        require(app.audio.adjust_volume(-0.08) < original_volume,
+                "volume-down control did not reduce master volume")
+        restored_volume = app.audio.adjust_volume(0.08)
+        require(abs(restored_volume - original_volume) < 0.001,
+                "volume-up control did not restore the previous master level")
+        require(app.audio.adjust_volume(-5.0) == 0.25,
+                "master volume lower bound is not enforced")
+        require(app.audio.adjust_volume(5.0) == 1.0,
+                "master volume upper bound is not enforced")
+        app.audio.master_volume = original_volume
+        app.audio._apply_volume()
+
+        # Suspense cues trigger only at their intended timer checkpoints.
+        app.audio.update(300, 4)
+        require(app.audio.last_alarm_marker == 300,
+                "five-minute suspense checkpoint did not trigger")
+        app.audio.update(50, 4)
+        require(app.audio.last_heartbeat_second == 50,
+                "late-game heartbeat cue did not trigger")
 
         # Face-lock brackets must align to a detected camera target and stay safe without one.
         class CameraProbe:
@@ -421,6 +447,8 @@ def run():
                 "stage transition animation did not start on a stage change")
         require(app.stage_manager.transition_to == 7,
                 "stage transition animation recorded the wrong destination")
+        require(app.stage_manager.transition_from == 6,
+                "stage transition animation forgot the layer that was just cleared")
         transition_probe = pygame.Surface((main.WIDTH, main.HEIGHT))
         transition_probe.fill((17, 18, 19))
         app.stage_manager.draw_transition(transition_probe)
