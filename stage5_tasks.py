@@ -261,9 +261,14 @@ class SymbolMatrixTask(TaskBase):
     def handle(self, event, pygame, width, height):
         if event.type == pygame.KEYDOWN:
             mapping = {pygame.K_1: self.SYMBOLS[0], pygame.K_2: self.SYMBOLS[1], pygame.K_3: self.SYMBOLS[2]}
-            if event.key in mapping:
-                if mapping[event.key] == self.target:
+            if event.key in mapping and mapping[event.key] == self.target:
+                self.done = True
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            for i, symbol in enumerate(self.SYMBOLS):
+                rr = pygame.Rect(width / 2 - 210 + i * 150, height - 125, 130, 55)
+                if rr.collidepoint(event.pos) and symbol == self.target:
                     self.done = True
+                    break
         return self.result()
 
     def draw(self, surface, draw_text, rounded_panel, glow_circle, pygame, width, height, t):
@@ -298,6 +303,8 @@ class WordDecryptTask(TaskBase):
         self.answer = self.rng.choice(self.words)
         self.scrambled = list(self.answer)
         self.rng.shuffle(self.scrambled)
+        while self.scrambled == list(self.answer):
+            self.rng.shuffle(self.scrambled)
         self.input_text = ""
 
     def handle(self, event, pygame, width, height):
@@ -341,27 +348,28 @@ class CyberMemoryTask(TaskBase):
 
     def handle(self, event, pygame, width, height):
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and time.monotonic() >= self.lock_until:
-            ox = width / 2 - 320
-            oy = 190
-            cell_w, cell_h = 150, 130
-            col = int((event.pos[0] - ox) / cell_w)
-            row = int((event.pos[1] - oy) / cell_h)
-            if 0 <= col < 4 and 0 <= row < 2:
-                idx = row * 4 + col
-                if not self.matched[idx] and not self.revealed[idx]:
-                    self.revealed[idx] = True
-                    if self.first is None:
-                        self.first = idx
-                    elif self.second is None and idx != self.first:
-                        self.second = idx
-                        if self.values[self.first] == self.values[self.second]:
-                            self.matched[self.first] = self.matched[self.second] = True
-                            self.revealed[self.first] = self.revealed[self.second] = True
-                            self.first = self.second = None
-                            if all(self.matched):
-                                self.done = True
-                        else:
-                            self.lock_until = time.monotonic() + 0.65
+            # Use the exact card rectangles that are drawn, rather than approximate grid cells.
+            idx = None
+            for i in range(8):
+                rr = pygame.Rect(width / 2 - 320 + (i % 4) * 160,
+                                 185 + (i // 4) * 145, 145, 125)
+                if rr.collidepoint(event.pos):
+                    idx = i
+                    break
+            if idx is not None and not self.matched[idx] and not self.revealed[idx]:
+                self.revealed[idx] = True
+                if self.first is None:
+                    self.first = idx
+                elif self.second is None and idx != self.first:
+                    self.second = idx
+                    if self.values[self.first] == self.values[self.second]:
+                        self.matched[self.first] = self.matched[self.second] = True
+                        self.revealed[self.first] = self.revealed[self.second] = True
+                        self.first = self.second = None
+                        if all(self.matched):
+                            self.done = True
+                    else:
+                        self.lock_until = time.monotonic() + 0.65
         return self.result()
 
     def update(self, dt):
