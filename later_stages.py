@@ -118,7 +118,7 @@ class LaterStagesController:
             for number in self.sequence:
                 self.number_positions[number] = [
                     random.uniform(150, max(151, self.app_width() - 150)),
-                    random.uniform(180, max(181, self.app_height() - 150)),
+                    random.uniform(245, max(246, self.app_height() - 150)),
                 ]
                 self.number_velocities[number] = [
                     random.choice([-1, 1]) * random.uniform(38, 95),
@@ -323,9 +323,9 @@ class LaterStagesController:
             if x < 110 or x > width - 110:
                 vx *= -1
                 x = max(110, min(width - 110, x))
-            if y < 165 or y > height - 125:
+            if y < 225 or y > height - 125:
                 vy *= -1
-                y = max(165, min(height - 125, y))
+                y = max(225, min(height - 125, y))
             self.number_positions[number] = [x, y]
             self.number_velocities[number] = [vx, vy]
 
@@ -694,7 +694,7 @@ class LaterStagesController:
             pygame.draw.circle(surface, (156, 105, 36), (cx, cy), 4, 1)
         for i in range(6):
             cx = rect.x + 80 + i * int((rect.w - 160) / 6)
-            cy = rect.y + int(rect.h * .22) + (i % 2) * 10
+            cy = table_y + int(rect.h * .04) + (i % 2) * 8
             pygame.draw.circle(surface, (185, 92, 74), (cx, cy), 11)
             pygame.draw.circle(surface, (255, 211, 151), (cx, cy), 4)
         gift = pygame.Rect(rect.right - 76, table_y - 35, 42, 34)
