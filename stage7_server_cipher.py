@@ -110,7 +110,10 @@ class Stage7Controller:
             draw_text(surface, "PHYSICAL CLUE // OPERATOR LOCATION", 11,
                       (panel.centerx, panel.y + 28), (255, 60, 78),
                       align="center", mono=True, bold=True)
-            draw_text(surface, self.app.setup_server_location, 21,
+            location_label = self.app.setup_server_location
+            if len(location_label) > 64:
+                location_label = location_label[:61].rstrip() + "…"
+            draw_text(surface, location_label, 21,
                       (panel.centerx, panel.y + 70), (255, 203, 94),
                       align="center", bold=True)
 

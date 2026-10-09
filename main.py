@@ -676,7 +676,10 @@ class Stage5Controller:
                 rounded_panel(surface, rr, (5, 15, 20), (54, 207, 169), 14, 2)
                 draw_text(surface, f"{i+1:02d}", 12, (rr.centerx, rr.y + 16),
                           (77, 255, 210), align="center", mono=True)
-                draw_text(surface, self.app.players[i].name, 15,
+                player_label = fit_text(
+                    self.app.players[i].name, 13, rr.w - 12, bold=True
+                )
+                draw_text(surface, player_label, 13,
                           (rr.centerx, rr.y + 44), (228, 239, 241),
                           align="center", bold=True)
             draw_text(surface, "המערכת מאתחלת מנעולים אישיים…", 14,
@@ -1023,9 +1026,11 @@ class StageManager:
 
         # Operator-configured physical clue location
         if self.app.setup_clue_location:
-            draw_text(surface, f"רמז: חפשו {self.app.setup_clue_location}",
-                      15, (WIDTH / 2, HEIGHT - 70), (255, 194, 70),
-                      align="center", bold=True)
+            clue_text = fit_text(
+                f"רמז: חפשו {self.app.setup_clue_location}", 15, WIDTH - 220, bold=True
+            )
+            draw_text(surface, clue_text, 15, (WIDTH / 2, HEIGHT - 70),
+                      (255, 194, 70), align="center", bold=True)
 
     def draw_placeholder(self, surface):
         self.app.background.draw(surface)

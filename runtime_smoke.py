@@ -119,6 +119,8 @@ def run():
         ]
         app.player_name = ""
         app.stage_manager.draw_stage_2(main.screen)
+        app.stage_manager.stage5.start()
+        app.stage_manager.stage5.draw(main.screen)
         pygame.display.flip()
         require(len(app.players) == 10, "roster render changed the registered-player count")
 
