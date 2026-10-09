@@ -965,7 +965,11 @@ class AudioDirector:
             pass
 
     def _ambient_target_level(self, remaining_seconds=None):
-        level = 0.25 if self.stage in (8, 9, 11) else 0.17
+        # Duck the drone under the number-by-frequency puzzle so every note remains clear.
+        if self.stage == 8:
+            return 0.065
+
+        level = 0.25 if self.stage in (9, 11) else 0.17
         if remaining_seconds is not None:
             remaining = max(0, int(remaining_seconds))
             if remaining <= 30:
