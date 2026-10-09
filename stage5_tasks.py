@@ -197,12 +197,17 @@ class OilCatchTask(TaskBase):
         self.update(dt)
         basket_y = .82
         for item in self.items:
+            # Stop on the fifth catch so several simultaneous overlaps cannot
+            # produce an impossible score such as 6/5 or 7/5.
+            if self.catches >= 5:
+                break
             if basket_y - .08 < item[1] < basket_y + .04 and abs(item[0] - self.basket_x) < .09:
                 self.catches += 1
                 item[1] = -0.1
                 item[0] = self.rng.uniform(.15, .85)
-                if self.catches >= 5:
+                if self.catches == 5:
                     self.done = True
+                    break
 
     def draw(self, surface, draw_text, rounded_panel, glow_circle, pygame, width, height, t):
         draw_text(surface, "OIL CATCH", 18, (width / 2, 70), (80, 255, 210),
