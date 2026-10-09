@@ -886,6 +886,28 @@ class LaterStagesController:
             pygame.draw.rect(surface, (53, 245, 161), (meter.x + 5, meter.y + 5, fill_width, meter.h - 10))
         draw_text(surface, f"ENERGY // {int(self.energy):03d}%", 18,
                   (width / 2, meter.y + meter.h + 22), (91, 255, 194), align="center", mono=True, bold=True)
+
+        mission_time = (
+            int(self.app.timer_frozen) if self.app.timer_frozen is not None
+            else int(self.app.remaining_seconds)
+        )
+        errors = int(getattr(self.app, "mistakes", 0))
+        if mission_time >= 45 * 60 and errors <= 3:
+            team_rank = "GHOST PROTOCOL"
+        elif mission_time >= 30 * 60 and errors <= 8:
+            team_rank = "ELITE OPERATORS"
+        elif mission_time >= 15 * 60:
+            team_rank = "FIELD OPERATORS"
+        else:
+            team_rank = "LAST-STAND SURVIVORS"
+        score_line = (
+            f"MISSION XP // {int(getattr(self.app, 'mission_xp', 0)):05d}"
+            f"    CLEARS // {int(getattr(self.app, 'stages_cleared', 0)):02d}/09"
+            f"    ERRORS // {errors:02d}    TEAM RANK // {team_rank}"
+        )
+        draw_text(surface, score_line, 13, (width / 2, height - 49),
+                  (255, 210, 125), align="center", mono=True, bold=True)
+
         mic_text = "MIC ACTIVE" if self._mic_stream is not None else "MIC UNAVAILABLE"
         draw_text(surface, f"MOTION + VOICE // {mic_text} // KEEP DANCING AND SINGING",
                   11, (width / 2, height - 27), (144, 195, 174), align="center", mono=True)
