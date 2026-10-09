@@ -741,6 +741,279 @@ class Button:
         return event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.rect.collidepoint(event.pos)
 
 
+class AudioDirector:
+    """Original procedural sci-fi audio: no external files, with safe silent fallback."""
+
+    EFFECTS = {
+        "click": (0.060, 0.13), "confirm": (0.31, 0.22),
+        "puzzle": (0.78, 0.28), "unlock": (1.04, 0.30),
+        "transition": (0.34, 0.18), "error": (0.36, 0.20),
+        "intrusion": (1.32, 0.28), "tick": (0.095, 0.14),
+        "urgent_tick": (0.16, 0.18), "victory": (1.82, 0.34),
+    }
+
+    def __init__(self):
+        self.app = None
+        self.enabled = True
+        self.available = False
+        self.sounds = {}
+        self.ambient_sound = None
+        self.ambient_channel = None
+        self.ambient_requested = False
+        self.stage = 0
+        self.last_countdown_second = None
+        self._last_played = {}
+        self._build()
+
+    def bind_app(self, app):
+        self.app = app
+
+    @staticmethod
+    def _add_note(wave, t, start, duration, frequency, amplitude, decay=5.0, glide=0.0):
+        active = (t >= start) & (t < start + duration)
+        if not np.any(active):
+            return
+        local = t[active] - start
+        phase = 2.0 * np.pi * (frequency * local + 0.5 * glide * local * local)
+        attack = np.minimum(1.0, local / 0.010)
+        release = np.clip((duration - local) / 0.045, 0.0, 1.0)
+        envelope = attack * np.exp(-decay * local) * release
+        wave[active] += amplitude * envelope * (
+            np.sin(phase) + 0.19 * np.sin(phase * 2.0) + 0.045 * np.sin(phase * 3.01)
+        )
+
+    def _wave_to_sound(self, wave, volume, *, gain=19000.0, stereo_width=0.0):
+        mixer = pygame.mixer.get_init()
+        if not mixer:
+            return None
+        sample_rate, sample_format, channels = mixer
+        if sample_format != -16 or channels < 1:
+            return None
+        mono = np.asarray(np.clip(np.asarray(wave, dtype=np.float32) * gain, -32767, 32767),
+                          dtype=np.int16)
+        if channels > 1:
+            phase = np.sin(2.0 * np.pi * 0.25 * np.arange(len(mono), dtype=np.float32) / sample_rate)
+            frames = np.repeat(mono[:, None], channels, axis=1)
+            frames[:, 0] = np.asarray(np.clip(mono.astype(np.float32) * (1 + stereo_width * phase),
+                                               -32767, 32767), dtype=np.int16)
+            frames[:, 1] = np.asarray(np.clip(mono.astype(np.float32) * (1 - stereo_width * phase),
+                                               -32767, 32767), dtype=np.int16)
+            samples = np.ascontiguousarray(frames)
+        else:
+            samples = np.ascontiguousarray(mono)
+        try:
+            sound = pygame.sndarray.make_sound(samples)
+            sound.set_volume(float(volume))
+            return sound
+        except (pygame.error, ValueError, TypeError):
+            return None
+
+    def _build_effect(self, name, sample_rate):
+        duration, volume = self.EFFECTS[name]
+        count = max(1, int(sample_rate * duration))
+        t = np.arange(count, dtype=np.float32) / float(sample_rate)
+        wave = np.zeros(count, dtype=np.float32)
+
+        if name == "click":
+            self._add_note(wave, t, 0.0, 0.047, 1120, 0.19, decay=74, glide=-680)
+            wave += np.sin(2 * np.pi * 3150 * t) * np.exp(-t * 145) * 0.018
+        elif name == "confirm":
+            for start, freq, amp in ((0.0, 659.25, 0.23), (0.060, 880.0, 0.18), (0.13, 1046.5, 0.16)):
+                self._add_note(wave, t, start, 0.22, freq, amp, decay=6.5)
+        elif name == "puzzle":
+            for start, freq, amp in ((0.0, 523.25, 0.23), (0.15, 659.25, 0.21),
+                                     (0.31, 783.99, 0.19), (0.47, 1046.5, 0.15)):
+                self._add_note(wave, t, start, 0.43, freq, amp, decay=3.3)
+            self._add_note(wave, t, 0.06, 0.42, 130.81, 0.10, decay=8.0)
+        elif name == "unlock":
+            self._add_note(wave, t, 0.0, 0.65, 82.41, 0.18, decay=7.0, glide=18)
+            for start, freq, amp in ((0.035, 220.0, 0.21), (0.18, 329.63, 0.19),
+                                     (0.34, 440.0, 0.17), (0.52, 659.25, 0.15),
+                                     (0.67, 880.0, 0.11)):
+                self._add_note(wave, t, start, 0.47, freq, amp, decay=4.5)
+            self._add_note(wave, t, 0.0, 0.19, 58.27, 0.11, decay=18, glide=-55)
+        elif name == "transition":
+            self._add_note(wave, t, 0.015, 0.22, 392.0, 0.17, decay=8)
+            self._add_note(wave, t, 0.13, 0.21, 523.25, 0.13, decay=9)
+        elif name == "error":
+            self._add_note(wave, t, 0.0, 0.23, 196.0, 0.22, decay=4.8, glide=-185)
+            self._add_note(wave, t, 0.075, 0.24, 146.83, 0.17, decay=5.0, glide=-80)
+            self._add_note(wave, t, 0.01, 0.21, 73.42, 0.10, decay=7.5)
+        elif name == "intrusion":
+            swell = np.minimum(1.0, t / 0.36) * np.clip((duration - t) / 0.20, 0, 1)
+            wave += swell * (
+                0.18 * np.sin(2 * np.pi * (43.0 * t + 5.6 * t * t))
+                + 0.10 * np.sin(2 * np.pi * 61.74 * t)
+                + 0.065 * np.sin(2 * np.pi * 87.31 * t)
+            )
+            self._add_note(wave, t, 0.72, 0.49, 247.0, 0.15, decay=2.4, glide=-105)
+            self._add_note(wave, t, 0.94, 0.31, 123.47, 0.10, decay=4.0, glide=-25)
+        elif name == "tick":
+            self._add_note(wave, t, 0.0, 0.071, 740.0, 0.20, decay=42, glide=-120)
+        elif name == "urgent_tick":
+            self._add_note(wave, t, 0.0, 0.095, 520.0, 0.20, decay=25, glide=-80)
+            self._add_note(wave, t, 0.045, 0.095, 880.0, 0.14, decay=30, glide=-160)
+        elif name == "victory":
+            for start, freq, amp in (
+                (0.02, 392.0, 0.20), (0.20, 523.25, 0.19), (0.41, 659.25, 0.18),
+                (0.65, 783.99, 0.17), (0.94, 1046.5, 0.16), (1.15, 1318.51, 0.12)
+            ):
+                self._add_note(wave, t, start, 0.66, freq, amp, decay=2.9)
+            self._add_note(wave, t, 0.63, 0.85, 130.81, 0.12, decay=2.0)
+            self._add_note(wave, t, 0.80, 0.82, 196.0, 0.09, decay=2.4)
+
+        edge = min(max(1, int(sample_rate * 0.008)), count // 2)
+        if edge > 1:
+            ramp = np.linspace(0.0, 1.0, edge, dtype=np.float32)
+            wave[:edge] *= ramp
+            wave[-edge:] *= ramp[::-1]
+        return self._wave_to_sound(wave, volume, gain=19000.0, stereo_width=0.025)
+
+    def _build_ambient(self, sample_rate):
+        # Every oscillator and the breathing envelope complete whole cycles over eight seconds.
+        duration = 8.0
+        t = np.arange(int(sample_rate * duration), dtype=np.float32) / float(sample_rate)
+        breath = 0.78 + 0.22 * np.sin(2 * np.pi * 0.125 * t)
+        wave = breath * (
+            0.17 * np.sin(2 * np.pi * 55.0 * t)
+            + 0.115 * np.sin(2 * np.pi * 82.5 * t + 0.12)
+            + 0.068 * np.sin(2 * np.pi * 110.0 * t + 0.35)
+            + 0.028 * np.sin(2 * np.pi * 165.0 * t + 0.64)
+        )
+        return self._wave_to_sound(wave, 0.62, gain=7200.0, stereo_width=0.075)
+
+    def _build(self):
+        try:
+            mixer = pygame.mixer.get_init()
+            if not mixer:
+                return
+            sample_rate, sample_format, _channels = mixer
+            if sample_format != -16:
+                return
+            pygame.mixer.set_num_channels(max(16, pygame.mixer.get_num_channels()))
+            for name in self.EFFECTS:
+                sound = self._build_effect(name, sample_rate)
+                if sound is not None:
+                    self.sounds[name] = sound
+            self.ambient_sound = self._build_ambient(sample_rate)
+            self.ambient_channel = pygame.mixer.Channel(15)
+            self.available = bool(self.sounds)
+        except (pygame.error, ValueError, TypeError, RuntimeError):
+            self.sounds = {}
+            self.ambient_sound = None
+            self.ambient_channel = None
+            self.available = False
+
+    def play(self, name):
+        if not self.enabled:
+            return False
+        sound = self.sounds.get(name)
+        if sound is None:
+            return False
+        now = time.monotonic()
+        cooldown = 0.065 if name == "click" else 0.10 if name in ("confirm", "tick") else 0.0
+        if now - self._last_played.get(name, -1000.0) < cooldown:
+            return False
+        self._last_played[name] = now
+        try:
+            sound.play()
+            return True
+        except pygame.error:
+            return False
+
+    def start_ambient(self):
+        self.ambient_requested = True
+        if not self.enabled or self.ambient_channel is None or self.ambient_sound is None:
+            return
+        try:
+            if not self.ambient_channel.get_busy():
+                self.ambient_channel.play(self.ambient_sound, loops=-1, fade_ms=900)
+            self._set_ambient_level()
+        except pygame.error:
+            pass
+
+    def stop_ambient(self):
+        self.ambient_requested = False
+        if self.ambient_channel is None:
+            return
+        try:
+            self.ambient_channel.fadeout(650) if self.enabled else self.ambient_channel.stop()
+        except pygame.error:
+            pass
+
+    def _set_ambient_level(self):
+        if self.ambient_channel is not None:
+            level = 0.25 if self.stage in (8, 9, 11) else 0.17
+            try:
+                self.ambient_channel.set_volume(level)
+            except pygame.error:
+                pass
+
+    def set_stage(self, stage):
+        self.stage = int(stage)
+        if self.stage >= 12:
+            self.stop_ambient()
+        elif self.ambient_requested:
+            self.start_ambient()
+            self._set_ambient_level()
+
+    def start_game(self):
+        self.last_countdown_second = None
+        self.start_ambient()
+        self.play("intrusion")
+
+    def update(self, remaining_seconds, stage):
+        stage = int(stage)
+        remaining = max(0, int(remaining_seconds))
+        if stage >= 12:
+            self.last_countdown_second = None
+            return
+        if 1 <= remaining <= 10 and remaining != self.last_countdown_second:
+            self.last_countdown_second = remaining
+            self.play("urgent_tick" if remaining <= 3 else "tick")
+        elif remaining > 10:
+            self.last_countdown_second = None
+
+    def toggle(self):
+        self.enabled = not self.enabled
+        try:
+            if pygame.mixer.get_init():
+                if self.enabled:
+                    pygame.mixer.unpause()
+                    if self.ambient_requested:
+                        self.start_ambient()
+                    if self.app and getattr(self.app, "state", "") == "game":
+                        if self.app.stage_manager.stage == 12:
+                            later = self.app.stage_manager.later
+                            if later.music_sound is None:
+                                later._start_celebration_music()
+                            elif later.music_channel is not None and not later.music_channel.get_busy():
+                                later.music_channel.play(later.music_sound, loops=-1)
+                else:
+                    pygame.mixer.pause()
+        except (pygame.error, AttributeError, RuntimeError):
+            pass
+        return self.enabled
+
+    def draw_status(self, surface, draw_text, width, height):
+        if not self.available:
+            label, color = "AUDIO OUTPUT UNAVAILABLE", (127, 147, 148)
+        elif self.enabled:
+            label, color = "SOUND DESIGN ACTIVE  //  F8 MUTE", (77, 190, 139)
+        else:
+            label, color = "SOUND MUTED  //  F8 UNMUTE", (255, 107, 111)
+        draw_text(surface, label, 9, (width - 28, height - 24), color,
+                  align="bottomright", mono=True)
+
+    def stop(self):
+        self.stop_ambient()
+        if self.ambient_channel is not None:
+            try:
+                self.ambient_channel.stop()
+            except pygame.error:
+                pass
+
+
 class Webcam:
     def __init__(self):
         self.cap = None
@@ -886,6 +1159,8 @@ class Stage5Controller:
             self.current_task.reset()
 
     def advance(self):
+        if self.assigned_player + 1 < len(self.app.players):
+            self.app.audio.play("puzzle")
         self.assigned_player += 1
         self.current_task_index += 1
         if self.assigned_player >= len(self.app.players):
@@ -1018,45 +1293,6 @@ class StageManager:
         self.transition_started_at = None
         self.transition_from = 0
         self.transition_to = 0
-        self.unlock_sound = self._create_unlock_sound()
-
-    @staticmethod
-    def _create_unlock_sound():
-        """Build a quiet, short sci-fi unlock cue without requiring external audio files."""
-        try:
-            mixer_info = pygame.mixer.get_init()
-            if not mixer_info:
-                return None
-            sample_rate, sample_format, channels = mixer_info
-            if sample_format != -16 or channels < 1:
-                return None
-
-            duration = 0.34
-            t = np.arange(int(sample_rate * duration), dtype=np.float32) / sample_rate
-            f1 = 190.0 + 145.0 * np.clip(t / 0.11, 0.0, 1.0)
-            f2 = 335.0 - 75.0 * np.clip((t - 0.11) / 0.11, 0.0, 1.0)
-            f3 = 260.0 + 390.0 * np.clip((t - 0.22) / 0.12, 0.0, 1.0)
-            freq = np.where(t < 0.11, f1, np.where(t < 0.22, f2, f3))
-            phase = 2.0 * np.pi * np.cumsum(freq) / sample_rate
-            envelope = np.minimum(1.0, t / 0.014) * np.clip((duration - t) / 0.085, 0.0, 1.0)
-            pulse = 0.82 + 0.18 * np.sin(2.0 * np.pi * 13.0 * t)
-            wave = (np.sin(phase) + 0.22 * np.sin(phase * 1.51)) * envelope * pulse
-            mono = np.clip(wave * 5200, -32767, 32767).astype(np.int16)
-            audio = np.repeat(mono[:, None], channels, axis=1) if channels > 1 else mono
-            cue = pygame.sndarray.make_sound(audio)
-            cue.set_volume(0.17)
-            return cue
-        except (pygame.error, ValueError, TypeError, AttributeError, RuntimeError):
-            # Some devices and headless sessions cannot initialize audio; visuals remain complete.
-            return None
-
-    def _play_unlock_sound(self):
-        if self.unlock_sound is None:
-            return
-        try:
-            self.unlock_sound.play()
-        except pygame.error:
-            pass
 
     def goto(self, stage):
         previous_stage = self.stage
@@ -1072,9 +1308,10 @@ class StageManager:
             self.transition_from = previous_stage
             self.transition_to = stage
             self.transition_started_at = time.monotonic()
-            self._play_unlock_sound()
+            self.app.audio.play("transition" if previous_stage == 1 else "unlock")
 
         self.stage = stage
+        self.app.audio.set_stage(stage)
         self.app.stage_started_at = time.monotonic()
         self.app.stage_message = ""
         if stage == 4:
@@ -1351,6 +1588,8 @@ class EscapeRoomApp:
         self.clock = pygame.time.Clock()
         self.background = CinematicBackground()
         self.webcam = Webcam()
+        self.audio = AudioDirector()
+        self.audio.bind_app(self)
 
         self.state = "setup"
         self.stage_manager = StageManager(self)
@@ -1400,8 +1639,9 @@ class EscapeRoomApp:
     def start_game(self):
         self.save_setup_config(silent=True)
         self.game_started_at = time.monotonic()
-        self.stage_manager.goto(1)
         self.state = "game"
+        self.audio.start_game()
+        self.stage_manager.goto(1)
 
     @property
     def remaining_seconds(self):
@@ -1716,6 +1956,7 @@ class EscapeRoomApp:
             return
 
         self.players.append(Player(name, filename))
+        self.audio.play("puzzle")
         self.player_name = ""
         self.roster_error = ""
 
@@ -1738,30 +1979,70 @@ class EscapeRoomApp:
                         self.stage_message = "ACCESS DENIED  //  RECHECK THE CLUE"
                         self.cipher_digits.clear()
 
+    def _rejection_signature(self):
+        """Read puzzle error text so newly rejected inputs receive one clear audio cue."""
+        signature = {}
+        keywords = (
+            "DENIED", "REJECTED", "FAILURE", "WRONG", "ERROR", "TIMEOUT",
+            "שגיאה", "שגוי", "לא מדויק", "לא ניתן", "תחילה פתרו", "חייב להגיע"
+        )
+        message = str(self.stage_message or "")
+        signature["stage_message"] = message if any(
+            word in message.upper() or word in message for word in keywords
+        ) else ""
+        sources = [
+            ("roster", self, ("roster_error",)),
+            ("stage4", self.stage_manager.stage4, ("error",)),
+            ("stage7", self.stage_manager.stage7, ("error",)),
+            ("later", self.stage_manager.later, ("error", "memory_error", "quantum_error")),
+        ]
+        task = self.stage_manager.stage5.current_task
+        if task is not None:
+            sources.append(("stage5_task", task, ("error", "feedback", "message")))
+        for prefix, obj, attrs in sources:
+            for attr in attrs:
+                value = getattr(obj, attr, "")
+                if isinstance(value, str):
+                    signature[f"{prefix}.{attr}"] = value
+        return signature
+
     def handle_game_event(self, event):
         if self.stage_manager.later.handle_lifeline(event, WIDTH, HEIGHT):
             return
-        if self.stage_manager.stage == 2:
+
+        stage_before = self.stage_manager.stage
+        errors_before = self._rejection_signature()
+        if stage_before == 2:
             self.handle_roster_event(event)
-        elif self.stage_manager.stage == 3:
+        elif stage_before == 3:
             self.handle_stage3_event(event)
-        elif self.stage_manager.stage == 4:
+        elif stage_before == 4:
             self.stage_manager.stage4.handle(event, pygame, WIDTH, HEIGHT)
-        elif self.stage_manager.stage == 5:
+        elif stage_before == 5:
             self.stage_manager.stage5.handle(event)
-        elif self.stage_manager.stage == 6:
+        elif stage_before == 6:
             self.stage_manager.stage6.handle(event, pygame, WIDTH, HEIGHT)
-        elif self.stage_manager.stage == 7:
+        elif stage_before == 7:
             self.stage_manager.stage7.handle(event, pygame, WIDTH, HEIGHT)
-        elif 8 <= self.stage_manager.stage <= 12:
+        elif 8 <= stage_before <= 12:
             self.stage_manager.later.handle(event, WIDTH, HEIGHT)
-        else:
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                self.running = False
+        elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            self.running = False
+
+        if self.stage_manager.stage == stage_before:
+            errors_after = self._rejection_signature()
+            if any(value and value != errors_before.get(key, "")
+                   for key, value in errors_after.items()):
+                self.audio.play("error")
+
     def handle_secret_keys(self, event):
         """Return True when a privileged operator shortcut consumed the key event."""
         if event.type != pygame.KEYDOWN:
             return False
+        if event.key == pygame.K_F8:
+            enabled = self.audio.toggle()
+            self.stage_message = "SOUND DESIGN ACTIVE" if enabled else "SOUND MUTED"
+            return True
         # Use the modifiers captured on this specific event, not a separate keyboard poll.
         mods = getattr(event, "mod", pygame.key.get_mods())
         skip_pressed = (
@@ -1800,6 +2081,7 @@ class EscapeRoomApp:
             self.stage_manager.later.update(dt)
 
         if self.state == "game":
+            self.audio.update(self.remaining_seconds, self.stage_manager.stage)
             self.stage_manager.later.lifeline_update()
 
     def draw(self):
@@ -1816,12 +2098,15 @@ class EscapeRoomApp:
                           (WIDTH / 2, HEIGHT - 18), (105, 255, 210),
                           align="midbottom", mono=True, bold=True)
 
+        self.audio.draw_status(screen, draw_text, WIDTH, HEIGHT)
         pygame.display.flip()
 
     def run(self):
         while self.running:
             dt = self.clock.tick(FPS) / 1000.0
             for event in pygame.event.get():
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    self.audio.play("click")
                 if self.handle_secret_keys(event):
                     if not self.running:
                         break
@@ -1834,6 +2119,8 @@ class EscapeRoomApp:
             self.update(dt)
             self.draw()
 
+        self.stage_manager.later._stop_mic()
+        self.audio.stop()
         self.webcam.release()
         pygame.quit()
         sys.exit(0)

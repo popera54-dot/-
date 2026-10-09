@@ -40,6 +40,24 @@ def run():
         require(main._glow_layer(12, (50, 220, 180), 13) is main._glow_layer(12, (50, 220, 180), 13),
                 "glow surface was not cached between frames")
 
+        # Test distinct procedural cues, non-silent buffers, global mute, and ambient lifecycle.
+        expected_sounds = {"click", "confirm", "puzzle", "unlock", "transition",
+                           "error", "intrusion", "tick", "urgent_tick", "victory"}
+        if app.audio.available:
+            require(expected_sounds.issubset(set(app.audio.sounds)),
+                    f"audio palette is incomplete: {expected_sounds - set(app.audio.sounds)}")
+            for name in expected_sounds:
+                raw = app.audio.sounds[name].get_raw()
+                require(bool(raw) and any(raw), f"synthesized {name} cue is silent")
+        prior_audio_state = app.audio.enabled
+        require(app.audio.toggle() != prior_audio_state, "F8 audio toggle did not change state")
+        app.audio.play("unlock")  # Must be harmless while muted.
+        require(app.audio.toggle() == prior_audio_state, "audio toggle did not restore its state")
+        app.audio.start_ambient()
+        require(app.audio.ambient_requested, "ambient sound request was not retained")
+        app.audio.stop_ambient()
+        require(not app.audio.ambient_requested, "ambient sound did not stop cleanly")
+
         # Face-lock brackets must align to a detected camera target and stay safe without one.
         class CameraProbe:
             available = True

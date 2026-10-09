@@ -440,6 +440,7 @@ class Stage4Controller:
         if self.route_answer == "15":
             self.route_verified = True
             self.error = ""
+            self.app.audio.play("confirm")
         else:
             self.route_verified = False
             self.error = "המסלול הנכון חייב להגיע ליציאה 15."
@@ -480,6 +481,7 @@ class Stage4Controller:
                 if not self.puzzle_confirmed:
                     self.puzzle_confirmed = True
                     self.error = ""
+                    self.app.audio.play("confirm")
                     return
                 self.phase = "complete"
                 self.app.stage_message = "STAGE 04 CLEARED  //  15 + 48 CONFIRMED"

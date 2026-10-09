@@ -44,8 +44,17 @@ python main.py
 
 The finale uses the webcam to estimate movement and optionally opens the microphone through `sounddevice`. Audio input is measured live only to drive the energy meter; the game does not save audio recordings.
 
+
+## Sound design
+
+- The game synthesizes layered sound effects and a low-volume ambient drone; no extra audio files are required.
+- Correct solutions, wrong inputs, stage unlocks, the opening intrusion, the last 10 seconds, and the final victory use distinct audio cues. Stage 8 keeps its four-note auditory puzzle.
+- Press `F8` at any time to mute or restore game audio. Celebration music is mixed below sound effects so the final victory cue remains audible.
+- If no audio device is available, the game continues without blocking puzzles or stage progression.
+
 ## Operator controls
 
+- `F8` — mute/unmute game audio
 - `Ctrl + Shift + Right Arrow` — skip the current stage for testing
 - `Ctrl + Alt + Shift + Esc` — emergency exit to Windows
 

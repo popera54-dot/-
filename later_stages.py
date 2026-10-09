@@ -167,25 +167,34 @@ class LaterStagesController:
         return self.app.screen_height if hasattr(self.app, "screen_height") else pygame.display.get_surface().get_height()
 
     def _make_beep(self):
+        """Create a soft, shaped note for the four-part listening puzzle."""
         try:
             mixer = pygame.mixer.get_init()
             if not mixer:
                 return
-            sample_rate, _, channels = mixer
-            sample_count = int(sample_rate * 0.12)
+            sample_rate, sample_format, channels = mixer
+            if sample_format != -16:
+                return
+            duration = 0.16
+            sample_count = int(sample_rate * duration)
+            t = np.arange(sample_count, dtype=np.float32) / float(sample_rate)
             frequency = self.signal_frequencies[min(self.audio_group, 3)]
-            wave = np.sin(2 * np.pi * frequency * np.arange(sample_count) / sample_rate)
-            samples = np.asarray(wave * 10000, dtype=np.int16)
+            attack = np.minimum(1.0, t / 0.009)
+            release = np.clip((duration - t) / 0.035, 0.0, 1.0)
+            envelope = attack * release * np.exp(-t * 1.55)
+            wave = np.sin(2 * np.pi * frequency * t) + 0.12 * np.sin(2 * np.pi * frequency * 2.01 * t)
+            samples = np.asarray(wave * envelope * 9500, dtype=np.int16)
             if channels > 1:
                 samples = np.repeat(samples[:, None], channels, axis=1)
-            self.sound = pygame.sndarray.make_sound(samples.copy())
+            self.sound = pygame.sndarray.make_sound(np.ascontiguousarray(samples))
+            self.sound.set_volume(0.24)
             self.audio_enabled = True
         except Exception:
             self.sound = None
             self.audio_enabled = False
 
     def _play_beep(self):
-        if self.sound is not None:
+        if self.app.audio.enabled and self.sound is not None:
             try:
                 self.sound.play()
             except Exception:
@@ -237,8 +246,9 @@ class LaterStagesController:
             if channels > 1:
                 samples = np.repeat(samples[:, None], channels, axis=1)
             self.music_sound = pygame.sndarray.make_sound(samples.copy())
+            self.music_sound.set_volume(0.38)
             self.music_channel = pygame.mixer.find_channel(True)
-            if self.music_channel is not None:
+            if self.music_channel is not None and self.app.audio.enabled:
                 self.music_channel.play(self.music_sound, loops=-1)
         except Exception:
             self.music_sound = None
@@ -367,6 +377,7 @@ class LaterStagesController:
                 self.victory_started = now
                 self.countdown_started = now
                 self.phase = "countdown"
+                self.app.audio.play("victory")
 
         if self.phase == "countdown" and self.countdown_started is not None:
             if now - self.countdown_started >= 4.8:
@@ -448,6 +459,8 @@ class LaterStagesController:
                     if self.next_number_index >= len(self.sequence):
                         self.app.stage_message = "INVERSION OVERRIDE // ACCEPTED"
                         self.app.stage_manager.goto(10)
+                    else:
+                        self.app.audio.play("confirm")
                 else:
                     self.next_number_index = 0
                     self.wrong_until = time.monotonic() + 1.0
@@ -915,8 +928,10 @@ class LaterStagesController:
             self.app.game_started_at -= 60
             self.lifeline_correct += 1
             self.lifeline_feedback = "+01:00 — דקה נוספת!"
+            self.app.audio.play("confirm")
         else:
             self.lifeline_feedback = "לא הפעם. השעון לא נוסף."
+            self.app.audio.play("error")
         self.lifeline_feedback_until = time.monotonic() + 0.75
         self.lifeline_index += 1
         if self.lifeline_index >= len(self.LIFELINE_QUESTIONS):
