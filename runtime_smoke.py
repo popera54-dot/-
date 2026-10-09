@@ -510,6 +510,42 @@ def run():
         require(later.phase == "countdown", "stage 12 did not enter countdown when energy was full")
         app.webcam.read = original_read
 
+        # The victory countdown flows into a real debrief; score/rank are based on mission stats.
+        app.timer_frozen = 45 * 60
+        app.mission_xp = 1740
+        app.stages_cleared = 9
+        app.mistakes = 2
+        later.countdown_started = time.monotonic() - 5.0
+        later._update_energy(0.016, time.monotonic())
+        require(later.phase == "debrief" and later.debrief_started is not None,
+                "stage 12 countdown did not lead into the mission debrief")
+        stats = later._team_debrief_stats()
+        require(stats["rank"] == "GHOST PROTOCOL" and stats["xp"] == 1740
+                and stats["clears"] == 9 and stats["errors"] == 2,
+                "mission debrief did not reflect the team's actual score")
+        debrief_surface = pygame.Surface((main.WIDTH, main.HEIGHT))
+        later._draw_stage12(
+            debrief_surface, main.draw_text, main.rounded_panel,
+            main.glow_circle, pygame, main.WIDTH, main.HEIGHT,
+            app.background.time
+        )
+        require(pygame.image.tostring(debrief_surface, "RGB") != bytes(main.WIDTH * main.HEIGHT * 3),
+                "mission debrief rendered an empty screen")
+
+        # Enter closes the debrief on request; auto-close also stops the music/microphone lifecycle.
+        app.running = True
+        later.handle(
+            pygame.event.Event(pygame.KEYDOWN, {"key": pygame.K_RETURN, "unicode": "\r"}),
+            main.WIDTH, main.HEIGHT
+        )
+        require(not app.running, "Enter did not close the mission debrief")
+        app.running = True
+        later.phase = "debrief"
+        later.debrief_started = time.monotonic() - 13.0
+        later._update_energy(0.016, time.monotonic())
+        require(not app.running, "mission debrief did not auto-close after its display interval")
+        app.running = True
+
         # The last-ten-minute lifeline should work in stages 8 through 11 too.
         app.timer_frozen = None
         app.game_started_at = time.monotonic() - (main.TOTAL_SECONDS - 599)
