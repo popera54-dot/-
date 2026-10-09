@@ -20,10 +20,35 @@ class TaskBase:
         self.rng = rng or random.Random()
         self.started = time.monotonic()
         self.done = False
+        self.app = None
+        self.feedback_text = ""
+        self.feedback_until = 0.0
+        self.feedback_success = False
+
+    def bind_app(self, app):
+        self.app = app
 
     def reset(self):
         self.started = time.monotonic()
         self.done = False
+        self.feedback_text = ""
+        self.feedback_until = 0.0
+        self.feedback_success = False
+
+    def _report_feedback(self, text, success, sound=None):
+        self.feedback_text = str(text)
+        self.feedback_until = time.monotonic() + 0.72
+        self.feedback_success = bool(success)
+        if sound and self.app is not None:
+            audio = getattr(self.app, "audio", None)
+            if audio is not None:
+                audio.play(sound)
+
+    def report_success(self, text="ACCESS GRANTED", sound=None):
+        self._report_feedback(text, True, sound)
+
+    def report_miss(self, text="SIGNAL REJECTED", sound="error"):
+        self._report_feedback(text, False, sound)
 
     def update(self, dt):
         pass
@@ -136,6 +161,9 @@ class FirewallMazeTask(TaskBase):
                 self.player = [nx, ny]
                 if self.grid[ny][nx] == "E":
                     self.done = True
+                    self.report_success("FIREWALL ROUTE OPEN")
+            else:
+                self.report_miss("FIREWALL BLOCKED")
         return self.result()
 
     def draw(self, surface, draw_text, rounded_panel, glow_circle, pygame, width, height, t):
@@ -214,7 +242,9 @@ class OilCatchTask(TaskBase):
                 item[0] = self.rng.uniform(.15, .85)
                 if self.catches == 5:
                     self.done = True
+                    self.report_success("FIVE CANISTERS SECURED")
                     break
+                self.report_success(f"OIL SECURED // {self.catches}/5", sound="click")
 
     def draw(self, surface, draw_text, rounded_panel, glow_circle, pygame, width, height, t):
         draw_text(surface, "OIL CATCH", 18, (width / 2, 70), (80, 255, 210),
@@ -265,14 +295,22 @@ class SymbolMatrixTask(TaskBase):
     def handle(self, event, pygame, width, height):
         if event.type == pygame.KEYDOWN:
             mapping = {pygame.K_1: self.SYMBOLS[0], pygame.K_2: self.SYMBOLS[1], pygame.K_3: self.SYMBOLS[2]}
-            if event.key in mapping and mapping[event.key] == self.target:
-                self.done = True
+            if event.key in mapping:
+                if mapping[event.key] == self.target:
+                    self.done = True
+                else:
+                    self.report_miss("SYMBOL MISMATCH")
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             for i, symbol in enumerate(self.SYMBOLS):
                 rr = pygame.Rect(width / 2 - 210 + i * 150, height - 125, 130, 55)
-                if rr.collidepoint(event.pos) and symbol == self.target:
-                    self.done = True
+                if rr.collidepoint(event.pos):
+                    if symbol == self.target:
+                        self.done = True
+                    else:
+                        self.report_miss("SYMBOL MISMATCH")
                     break
+        if self.done:
+            self.report_success("MAJORITY SYMBOL IDENTIFIED")
         return self.result()
 
     def draw(self, surface, draw_text, rounded_panel, glow_circle, pygame, width, height, t):
@@ -318,8 +356,10 @@ class WordDecryptTask(TaskBase):
             elif event.key == pygame.K_RETURN:
                 if self.input_text.strip() == self.answer:
                     self.done = True
+                    self.report_success("DECRYPTION ACCEPTED")
                 else:
                     self.input_text = ""
+                    self.report_miss("DECRYPTION REJECTED")
             elif event.unicode and len(self.input_text) < 12 and event.unicode.isprintable():
                 self.input_text += event.unicode
         return self.result()
@@ -372,8 +412,12 @@ class CyberMemoryTask(TaskBase):
                         self.first = self.second = None
                         if all(self.matched):
                             self.done = True
+                            self.report_success("MEMORY MATRIX CLEARED")
+                        else:
+                            self.report_success("PAIR VERIFIED", sound="click")
                     else:
                         self.lock_until = time.monotonic() + 0.65
+                        self.report_miss("PAIR MISMATCH")
         return self.result()
 
     def update(self, dt):
@@ -420,8 +464,12 @@ class ColorCodeTask(TaskBase):
                         self.cursor += 1
                         if self.cursor == 3:
                             self.done = True
+                            self.report_success("COLOR SEQUENCE ACCEPTED")
+                        else:
+                            self.report_success(f"SEQUENCE {self.cursor}/3", sound="click")
                     else:
                         self.cursor = 0
+                        self.report_miss("SEQUENCE RESET")
         return self.result()
 
     def draw(self, surface, draw_text, rounded_panel, glow_circle, pygame, width, height, t):
@@ -481,10 +529,13 @@ class TriviaTask(TaskBase):
                         self.done = True
                         self.feedback = "ACCESS GRANTED"
                         self.feedback_until = time.monotonic() + 1.2
+                        self.report_success("ACCESS GRANTED")
                     else:
                         self.deadline = time.monotonic() + 30
                         self.feedback = "תשובה שגויה — הטיימר אופס."
                         self.feedback_until = time.monotonic() + 1.5
+                        # The app's shared rejection detector already plays the error cue for Trivia.
+                        self.report_miss("ANSWER REJECTED", sound=None)
         return self.result()
 
     def draw(self, surface, draw_text, rounded_panel, glow_circle, pygame, width, height, t):
@@ -543,8 +594,12 @@ class DreidelSaysTask(TaskBase):
                         self.input_index += 1
                         if self.input_index == len(self.sequence):
                             self.done = True
+                            self.report_success("DREIDEL SEQUENCE VERIFIED")
+                        else:
+                            self.report_success(f"SEQUENCE {self.input_index}/4", sound="click")
                     else:
                         self.input_index = 0
+                        self.report_miss("SEQUENCE LOST // WATCH THE SIGNAL")
         return self.result()
 
     def draw(self, surface, draw_text, rounded_panel, glow_circle, pygame, width, height, t):
@@ -587,6 +642,9 @@ class WireCutTask(TaskBase):
                 if rr.collidepoint(event.pos):
                     if i == self.correct:
                         self.done = True
+                        self.report_success("CORRECT WIRE SEVERED")
+                    else:
+                        self.report_miss("WRONG WIRE // CIRCUIT RESET")
         return self.result()
 
     def draw(self, surface, draw_text, rounded_panel, glow_circle, pygame, width, height, t):
@@ -630,8 +688,12 @@ class MissingLetterTask(TaskBase):
     def handle(self, event, pygame, width, height):
         if (event.type == pygame.KEYDOWN
                 and time.monotonic() < self.flash_until
-                and event.unicode == self.current):
-            self.done = True
+                and event.unicode in self.letters):
+            if event.unicode == self.current:
+                self.done = True
+                self.report_success("SIGNAL CAPTURED")
+            else:
+                self.report_miss("SIGNAL MISREAD")
         return self.result()
 
     def draw(self, surface, draw_text, rounded_panel, glow_circle, pygame, width, height, t):
