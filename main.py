@@ -328,30 +328,30 @@ def draw_intrusion_monitor(surface, rect, t=0.0, *, silhouette=True, compact=Fal
         pygame.draw.lines(surface, (13, 54, 43), False, body[6:11], 2)
 
         hood = [
-            (cx - int(sw * 0.105), sy + int(sh * 0.47)),
-            (cx - int(sw * 0.145), sy + int(sh * 0.37)),
-            (cx - int(sw * 0.155), sy + int(sh * 0.27)),
-            (cx - int(sw * 0.12), sy + int(sh * 0.20)),
-            (cx - int(sw * 0.06), sy + int(sh * 0.16)),
-            (cx, sy + int(sh * 0.145)),
-            (cx + int(sw * 0.06), sy + int(sh * 0.16)),
-            (cx + int(sw * 0.12), sy + int(sh * 0.20)),
-            (cx + int(sw * 0.155), sy + int(sh * 0.27)),
-            (cx + int(sw * 0.145), sy + int(sh * 0.37)),
-            (cx + int(sw * 0.105), sy + int(sh * 0.47)),
+            (cx - int(sw * 0.105), sy + int(sh * 0.52)),
+            (cx - int(sw * 0.145), sy + int(sh * 0.42)),
+            (cx - int(sw * 0.155), sy + int(sh * 0.32)),
+            (cx - int(sw * 0.12), sy + int(sh * 0.25)),
+            (cx - int(sw * 0.06), sy + int(sh * 0.225)),
+            (cx, sy + int(sh * 0.215)),
+            (cx + int(sw * 0.06), sy + int(sh * 0.225)),
+            (cx + int(sw * 0.12), sy + int(sh * 0.25)),
+            (cx + int(sw * 0.155), sy + int(sh * 0.32)),
+            (cx + int(sw * 0.145), sy + int(sh * 0.42)),
+            (cx + int(sw * 0.105), sy + int(sh * 0.52)),
         ]
         pygame.draw.polygon(surface, (3, 12, 12), hood)
         pygame.draw.lines(surface, (35, 119, 78), False, hood, 2)
         face_void = [
-            (cx - int(sw * 0.105), sy + int(sh * 0.255)),
-            (cx - int(sw * 0.075), sy + int(sh * 0.225)),
-            (cx, sy + int(sh * 0.215)),
-            (cx + int(sw * 0.075), sy + int(sh * 0.225)),
-            (cx + int(sw * 0.105), sy + int(sh * 0.255)),
-            (cx + int(sw * 0.09), sy + int(sh * 0.38)),
-            (cx + int(sw * 0.055), sy + int(sh * 0.455)),
-            (cx - int(sw * 0.055), sy + int(sh * 0.455)),
-            (cx - int(sw * 0.09), sy + int(sh * 0.38)),
+            (cx - int(sw * 0.105), sy + int(sh * 0.315)),
+            (cx - int(sw * 0.075), sy + int(sh * 0.285)),
+            (cx, sy + int(sh * 0.275)),
+            (cx + int(sw * 0.075), sy + int(sh * 0.285)),
+            (cx + int(sw * 0.105), sy + int(sh * 0.315)),
+            (cx + int(sw * 0.09), sy + int(sh * 0.43)),
+            (cx + int(sw * 0.055), sy + int(sh * 0.505)),
+            (cx - int(sw * 0.055), sy + int(sh * 0.505)),
+            (cx - int(sw * 0.09), sy + int(sh * 0.43)),
         ]
         pygame.draw.polygon(surface, (0, 3, 4), face_void)
         # A restrained green rim catches the hood; there are no eyes or artificial face marks.
