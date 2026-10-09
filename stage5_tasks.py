@@ -434,8 +434,29 @@ class TriviaTask(TaskBase):
         self.options = ["3", "7", "8", "12"]
         self.answer = 2
         self.deadline = time.monotonic() + 30
+        self.feedback = ""
+        self.feedback_until = 0.0
+        self.timeout_count = 0
+
+    def reset(self):
+        super().reset()
+        # Start the 30-second attempt when the verified player receives the task,
+        # not while the rest of the group is still in the briefing/verification flow.
+        self.deadline = time.monotonic() + 30
+        self.feedback = ""
+        self.feedback_until = 0.0
+
+    def update(self, dt):
+        now = time.monotonic()
+        if not self.done and now >= self.deadline:
+            self.timeout_count += 1
+            self.feedback = "הזמן נגמר — ניסיון חדש מתחיל עכשיו."
+            self.feedback_until = now + 1.8
+            self.deadline = now + 30
 
     def handle(self, event, pygame, width, height):
+        # Process an expired deadline before accepting a click from the event queue.
+        self.update(0)
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             for i in range(4):
                 rr = pygame.Rect(width / 2 - 330 + (i % 2) * 340,
@@ -443,8 +464,12 @@ class TriviaTask(TaskBase):
                 if rr.collidepoint(event.pos):
                     if i == self.answer:
                         self.done = True
+                        self.feedback = "ACCESS GRANTED"
+                        self.feedback_until = time.monotonic() + 1.2
                     else:
                         self.deadline = time.monotonic() + 30
+                        self.feedback = "תשובה שגויה — הטיימר אופס."
+                        self.feedback_until = time.monotonic() + 1.5
         return self.result()
 
     def draw(self, surface, draw_text, rounded_panel, glow_circle, pygame, width, height, t):
@@ -461,6 +486,10 @@ class TriviaTask(TaskBase):
                              410 + (i // 2) * 100, 300, 70)
             rounded_panel(surface, rr, (6, 17, 23), (49, 94, 98), 14, 2)
             draw_text(surface, option, 22, rr.center, (230, 241, 243), align="center", bold=True)
+        if self.feedback and time.monotonic() < self.feedback_until:
+            color = (91, 255, 204) if self.done else (255, 83, 98)
+            draw_text(surface, self.feedback, 17, (width / 2, 335),
+                      color, align="center", bold=True)
 
 
 class DreidelSaysTask(TaskBase):
@@ -468,6 +497,14 @@ class DreidelSaysTask(TaskBase):
 
     def __init__(self, rng=None):
         super().__init__(rng)
+        self.sequence = [self.rng.randrange(4) for _ in range(4)]
+        self.input_index = 0
+        self.preview_until = time.monotonic() + 2.3
+        self.flash_index = -1
+
+    def reset(self):
+        super().reset()
+        # The sequence preview starts when the player begins the task, after face verification.
         self.sequence = [self.rng.randrange(4) for _ in range(4)]
         self.input_index = 0
         self.preview_until = time.monotonic() + 2.3
@@ -558,6 +595,13 @@ class MissingLetterTask(TaskBase):
     def __init__(self, rng=None):
         super().__init__(rng)
         self.letters = ["נ", "ג", "ה", "פ"]
+        self.current = self.rng.choice(self.letters)
+        self.next_swap = time.monotonic() + self.rng.uniform(.8, 1.5)
+        self.flash_until = 0
+
+    def reset(self):
+        super().reset()
+        # Give a fresh random letter and a fresh timing cycle for the assigned player.
         self.current = self.rng.choice(self.letters)
         self.next_swap = time.monotonic() + self.rng.uniform(.8, 1.5)
         self.flash_until = 0
