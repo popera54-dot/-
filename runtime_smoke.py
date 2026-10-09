@@ -470,7 +470,7 @@ def run():
                 "20-second clear did not award the expected 203 XP")
         require(app.stages_cleared == clears_before + 1,
                 "successful clear was not counted")
-        require(app.last_cleared_stage == 3 and app.last_score_gain == 200,
+        require(app.last_cleared_stage == 3 and app.last_score_gain == 203,
                 "clear feedback did not store stage and score")
 
         # Repeating the same bad code should still produce a new error cue and count.
