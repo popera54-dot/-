@@ -463,8 +463,11 @@ class TriviaTask(TaskBase):
             self.deadline = now + 30
 
     def handle(self, event, pygame, width, height):
-        # Process an expired deadline before accepting a click from the event queue.
-        self.update(0)
+        # Discard any click queued after the attempt expired; it must not answer
+        # the newly started 30-second attempt.
+        if not self.done and time.monotonic() >= self.deadline:
+            self.update(0)
+            return self.result()
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             for i in range(4):
                 rr = pygame.Rect(width / 2 - 330 + (i % 2) * 340,
