@@ -648,34 +648,36 @@ class CinematicBackground:
         draw_grid(surface)
 
         # Dense hacker terminal data rain: green streams with intermittent red alerts.
-        glyphs = ["0", "1", "7", "X", "A", "F", "C", "E", "M", "K", ":", "/", "<", ">", "#", "$"]
+        glyphs = ("0", "1", "7", "X", "A", "F", "C", "E", "M", "K", ":", "/", "<", ">", "#", "$")
         for x in range(10, WIDTH, 28):
             speed = 55 + (x * 17) % 125
             offset = int((self.time * speed + x * 31) % (HEIGHT + 180))
             length = 8 + ((x // 28) % 9)
+            column = x // 28
             for j in range(length):
                 yy = (offset - j * 22) % (HEIGHT + 40) - 20
                 intensity = clamp(160 - j * 15, 35, 160)
-                is_red = ((x // 28) % 17 == 0) and j < 4
+                is_red = (column % 17 == 0) and j < 4
                 col = (255, intensity // 3, intensity // 3) if is_red else (35, intensity, 88)
-                draw_text(surface, random.choice(glyphs), 13,
-                          (x, yy), col, mono=True, align="center")
+                # Stable glyphs move through the rain instead of flickering into new characters
+                # every rendered frame, preserving readability and a calmer cinematic texture.
+                glyph = glyphs[(column * 7 + j * 11) % len(glyphs)]
+                draw_text(surface, glyph, 13, (x, yy), col, mono=True, align="center")
 
-        # Wide terminal panels drifting behind gameplay.
-        for k in range(7):
+        # Stable diagnostic lines drift behind gameplay; time moves the panels, not their text.
+        terminal_messages = (
+            "ACCESSING SECURITY CORE...",
+            "AUTH_CHANNEL::MKBS_2.0",
+            "DECRYPT /████/████/████",
+            "INTRUSION TRACE // 97%",
+            "FIREWALL NODE // BREACHED",
+            "ROOT SESSION // UNKNOWN",
+            "WARNING // SYSTEM INTEGRITY",
+        )
+        for k, message in enumerate(terminal_messages):
             y = 110 + k * 95
             drift = int(math.sin(self.time * 0.7 + k) * 35)
-            draw_text(surface,
-                      random.choice([
-                          "ACCESSING SECURITY CORE...",
-                          "AUTH_CHANNEL::MKBS_2.0",
-                          "DECRYPT /████/████/████",
-                          "INTRUSION TRACE // 97%",
-                          "FIREWALL NODE // BREACHED",
-                          "ROOT SESSION // UNKNOWN",
-                          "WARNING // SYSTEM INTEGRITY",
-                      ]),
-                      12, (18 + drift, y), (43, 128, 99), mono=True)
+            draw_text(surface, message, 12, (18 + drift, y), (43, 128, 99), mono=True)
 
         # Red diagnostic rails, like a compromised military terminal.
         for side in (0, WIDTH - 8):
@@ -1100,6 +1102,7 @@ class AudioDirector:
             return False
         if self.ambient_requested:
             self.stop_ambient()
+            self._save_preferences()
             return False
         self.start_ambient()
         self._save_preferences()
