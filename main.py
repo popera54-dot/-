@@ -1271,6 +1271,7 @@ class Stage5Controller:
         self.assigned_player += 1
         self.current_task_index += 1
         if self.assigned_player >= len(self.app.players):
+            self.app.stage_message = "SECURITY CHAIN CLEARED"
             self.app.stage_manager.goto(6)
             return
         self.begin_verification()
