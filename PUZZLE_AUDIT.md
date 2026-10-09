@@ -27,13 +27,16 @@ Minimal correction used by the game:
 
 The declared answer remains **3832**.
 
-## Stage 4 — Puzzle 2
+## Stage 4 — Hanukkah Maze + Physical Puzzle 48
 
-**Status: cannot fully validate from the supplied document.**
+**Status: implemented and checked against the clarified design.**
 
-The checklist says to prepare a printed Hanukkah menorah/jug image containing the number **48**, cut into puzzle pieces and hidden around the room. fileciteturn16file0L1-L6
-
-The document does not contain a complete stage-4 gameplay specification describing exactly how the assembled 48 image becomes the answer / transition. The implementation must therefore not invent a solution until the missing design is supplied.
+- The screen is split into two main halves: a visual maze on the left and the physical-piece location board on the right.
+- The operator can add or remove any number of physical piece locations before the game; Stage 4 displays those saved locations with scrolling when needed.
+- The maze is generated as a perfect maze, with many Hanukkah-object decoys and multiple numbered exits.
+- The three required symbols shown above the maze are a dreidel, an oil jug, and a menorah. All three sit on the unique route from START to exit **15**.
+- The automated puzzle check verifies that exactly one numbered exit has a path containing all three required symbols, and that exit is 15.
+- The family assembles the physical picture marked **48** using the operator-configured hidden-piece locations. The continue button represents the operator/group confirmation that both 15 and 48 have been solved.
 
 ## Stage 5 — Security Chain / Task Bank
 
@@ -104,7 +107,7 @@ The declared values **X=64, Y=200, Z=66** are therefore internally consistent.
 
 **Status: gameplay framework is coherent.**
 
-Motion and microphone activity raise the energy meter until 100%; the finale then performs a countdown and exits the application. The document displays the countdown sequence as 1→5 while simultaneously calling it a countdown and saying the exit happens at 1. The implementation should follow the semantic instruction **5→1** so that the countdown is actually a countdown and reaches 1 immediately before exit.
+Motion and microphone activity raise the energy meter until 100%; a steady fallback gain also guarantees progress if camera/microphone input is unavailable. The finale waits at least 90 seconds before the countdown and exits the application. The document displays the countdown sequence as 1→5 while simultaneously calling it a countdown and saying the exit happens at 1. The implementation should follow the semantic instruction **5→1** so that the countdown is actually a countdown and reaches 1 immediately before exit.
 
 ## Overall result
 
