@@ -7,7 +7,7 @@ os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
 import pygame
 import main
-from stage5_tasks import CyberMemoryTask, SymbolMatrixTask
+from stage5_tasks import CyberMemoryTask, MissingLetterTask, SymbolMatrixTask
 
 
 def require(condition, message):
@@ -44,6 +44,15 @@ def run():
             pygame, main.WIDTH, main.HEIGHT, app.background.time
         )
         pygame.display.flip()
+
+        # The brief missing-letter flash must not accept an answer while the letter is hidden.
+        letter_task = MissingLetterTask()
+        letter_event = pygame.event.Event(pygame.KEYDOWN, {"unicode": letter_task.current})
+        letter_task.handle(letter_event, pygame, main.WIDTH, main.HEIGHT)
+        require(not letter_task.done, "stage 5 missing-letter task accepted a hidden letter")
+        letter_task.flash_until = time.monotonic() + 1.0
+        letter_task.handle(letter_event, pygame, main.WIDTH, main.HEIGHT)
+        require(letter_task.done, "stage 5 missing-letter task rejected a visible matching letter")
 
         # Fast-forward the sound pattern and verify the state machine leaves listening.
         app.stage_manager.goto(8)
