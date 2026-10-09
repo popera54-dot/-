@@ -147,8 +147,18 @@ class Stage4Controller:
             if len(safe_other_leaves) >= 9:
                 break
 
+        # Keep the maze visually rich with 10 exits while ensuring no decoy
+        # exit's path contains all three required symbols. Some random perfect
+        # mazes place too many dead ends after the third symbol, so regenerate
+        # rather than shipping a map with too few choices.
+        if len(safe_other_leaves) < 9 and self._generation_attempt < 30:
+            self._generation_attempt += 1
+            self.generate_puzzle()
+            return
+
+        self._generation_attempt = 0
         self.exits = [(self.finish_cell, 15)]
-        for cell, number in zip(safe_other_leaves, self.EXIT_NUMBERS):
+        for cell, number in zip(safe_other_leaves[:9], self.EXIT_NUMBERS):
             self.exits.append((cell, number))
 
     def _draw_icon(self, surface, name, center, scale, pygame):
