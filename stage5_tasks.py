@@ -195,13 +195,16 @@ class OilCatchTask(TaskBase):
 
     def update_and_collide(self, dt, width, height):
         self.update(dt)
-        basket_y = .82
+        basket_screen_y = .82
+        # Falling-object state is drawn at screen_y = .18 + state_y * .65.
+        # Convert the basket's screen location back into that state coordinate.
+        catch_y = (basket_screen_y - .18) / .65
         for item in self.items:
-            # Stop on the fifth catch so several simultaneous overlaps cannot
-            # produce an impossible score such as 6/5 or 7/5.
+            # Stop on the fifth catch so simultaneous overlaps never produce 6/5.
             if self.catches >= 5:
                 break
-            if basket_y - .08 < item[1] < basket_y + .04 and abs(item[0] - self.basket_x) < .09:
+            # Match the rendered basket width and its upper catch zone.
+            if catch_y - .07 < item[1] < catch_y + .02 and abs(item[0] - self.basket_x) < .045:
                 self.catches += 1
                 item[1] = -0.1
                 item[0] = self.rng.uniform(.15, .85)
