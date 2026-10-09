@@ -22,6 +22,17 @@ def run():
     app.timer_frozen = None
 
     try:
+        # The flashlight must reveal its centre, with darkness increasing toward the edge.
+        overlay = app.stage_manager.stage6.make_flashlight_overlay(
+            320, 220, (160, 110), pygame, radius=90
+        )
+        alpha_map = pygame.surfarray.array_alpha(overlay)
+        center_alpha = int(alpha_map[160, 110])
+        middle_alpha = int(alpha_map[205, 110])
+        outside_alpha = int(alpha_map[260, 110])
+        require(center_alpha < middle_alpha < outside_alpha,
+                f"stage 6 flashlight gradient is reversed: {center_alpha}, {middle_alpha}, {outside_alpha}")
+
         # Render every implemented stage at least once in a headless SDL surface.
         for stage in (4, 8, 9, 10, 11, 12):
             app.stage_manager.goto(stage)
