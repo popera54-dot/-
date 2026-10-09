@@ -36,6 +36,18 @@ def run():
         later.update(0.016)
         require(later.phase in ("verify", "code"), "stage 8 audio phase did not complete")
 
+        # The audio puzzle's replay button should replay the signal without restarting face checks.
+        later.phase = "code"
+        later.replay_button = pygame.Rect(0, 0, 100, 100)
+        replay_event = pygame.event.Event(
+            pygame.MOUSEBUTTONDOWN, {"button": 1, "pos": (50, 50)}
+        )
+        later.handle(replay_event, main.WIDTH, main.HEIGHT)
+        require(later.phase == "listen" and later.replay_only, "stage 8 replay did not start")
+        later.next_beep_at = time.monotonic() - 50
+        later.update(0.016)
+        require(later.phase == "code" and not later.replay_only, "stage 8 replay did not return to code entry")
+
         # Memory image timer advances to questions; correct answers unlock the quantum lock.
         app.stage_manager.goto(10)
         later.phase = "memory"
