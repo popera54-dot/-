@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import math
 import os
 import random
@@ -869,8 +870,10 @@ class EscapeRoomApp:
         self.setup_clue_location = "במיקום שהוגדר בלוח המפעיל"
         self.setup_server_location = "במיקום שהוגדר בלוח המפעיל"
         self.setup_puzzle_locations = [""]
-        self.setup_active_piece = 0
+        self.setup_active_piece = None
+        self.setup_active_text_field = None
         self.setup_piece_scroll = 0
+        self.load_setup_config()
 
         self.cipher_digits: list[str] = []
         self.game_started_at = None
@@ -900,6 +903,7 @@ class EscapeRoomApp:
         ]
 
     def start_game(self):
+        self.save_setup_config(silent=True)
         self.game_started_at = time.monotonic()
         self.stage_manager.goto(1)
         self.state = "game"
@@ -940,21 +944,61 @@ class EscapeRoomApp:
                   (70, 255, 204), align="center", mono=True)
 
         # Setup fields rendered as stylized cards
-        self.setup_field(surface, 70, 245, 650, "STAGE 03  //  CLUE LOCATION", self.setup_clue_location)
-        self.setup_field(surface, 70, 365, 650, "STAGE 07  //  SERVER CLUE LOCATION", self.setup_server_location)
+        self.setup_field(surface, 70, 245, 650, "STAGE 03  //  CLUE LOCATION", self.setup_clue_location, "clue")
+        self.setup_field(surface, 70, 365, 650, "STAGE 07  //  SERVER CLUE LOCATION", self.setup_server_location, "server")
         self.draw_puzzle_location_editor(surface)
 
         for b in self.setup_buttons:
             b.draw(surface)
 
+        if self.stage_message:
+            draw_text(surface, self.stage_message, 12, (WIDTH / 2, HEIGHT - 48),
+                      (255, 204, 100), align="center", bold=True)
         draw_text(surface, "SAFE KIOSK  •  NO SYSTEM SECURITY DISABLED  •  OPERATOR EXIT ENABLED",
                   12, (WIDTH / 2, HEIGHT - 20), (80, 103, 108), align="center", mono=True)
 
-    def setup_field(self, surface, x, y, w, label, value):
+    def load_setup_config(self):
+        config_path = DATA_DIR / "operator_config.json"
+        try:
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            self.setup_clue_location = str(config.get("setup_clue_location", self.setup_clue_location))
+            self.setup_server_location = str(config.get("setup_server_location", self.setup_server_location))
+            locations = config.get("setup_puzzle_locations", self.setup_puzzle_locations)
+            if isinstance(locations, list):
+                self.setup_puzzle_locations = [str(value)[:120] for value in locations] or [""]
+        except (OSError, ValueError, TypeError):
+            pass
+
+    def save_setup_config(self, silent=False):
+        config_path = DATA_DIR / "operator_config.json"
+        payload = {
+            "setup_clue_location": self.setup_clue_location,
+            "setup_server_location": self.setup_server_location,
+            "setup_puzzle_locations": self.setup_puzzle_locations,
+        }
+        try:
+            DATA_DIR.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+            if not silent:
+                count = len([value for value in self.setup_puzzle_locations if value.strip()])
+                self.stage_message = f"ההגדרות נשמרו • {count} מיקומי פאזל."
+            return True
+        except OSError:
+            if not silent:
+                self.stage_message = "לא ניתן לשמור את ההגדרות בתיקיית המשחק."
+            return False
+
+    def setup_field(self, surface, x, y, w, label, value, field_key=None):
         rr = pygame.Rect(x, y, w, 86)
-        rounded_panel(surface, rr, (5, 13, 18, 245), (32, 71, 78), 18, 1)
+        active = field_key is not None and self.setup_active_text_field == field_key
+        rounded_panel(surface, rr, (5, 16, 21, 245),
+                      (255, 194, 78) if active else (32, 71, 78), 18, 2 if active else 1)
         draw_text(surface, label, 11, (x + 18, y + 17), (74, 255, 211), mono=True, bold=True)
-        draw_text(surface, value, 18, (x + 18, y + 53), (224, 237, 239), align="midleft")
+        shown = value if len(value) <= 62 else "..." + value[-59:]
+        draw_text(surface, shown, 17, (x + 18, y + 53), (224, 237, 239), align="midleft")
+        if active:
+            draw_text(surface, "EDITING // ENTER TO FINISH", 9, (rr.right - 14, rr.y + 15),
+                      (255, 194, 78), align="topright", mono=True, bold=True)
 
     def draw_puzzle_location_editor(self, surface):
         panel = pygame.Rect(70, 480, 650, 178)
@@ -1011,23 +1055,42 @@ class EscapeRoomApp:
             if event.key == pygame.K_ESCAPE:
                 self.running = False
                 return
-            if event.key == pygame.K_BACKSPACE and self.setup_active_piece is not None:
-                self.setup_puzzle_locations[self.setup_active_piece] = self.setup_puzzle_locations[self.setup_active_piece][:-1]
+
+            if self.setup_active_text_field is not None:
+                field = self.setup_active_text_field
+                attr = "setup_clue_location" if field == "clue" else "setup_server_location"
+                current = getattr(self, attr)
+                if event.key == pygame.K_BACKSPACE:
+                    setattr(self, attr, current[:-1])
+                elif event.key == pygame.K_RETURN:
+                    self.setup_active_text_field = None
+                    self.stage_message = "מיקום הרמז נשמר לעריכה."
+                elif len(event.unicode) == 1 and event.unicode.isprintable() and len(current) < 120:
+                    setattr(self, attr, current + event.unicode)
                 return
-            if event.key == pygame.K_DELETE and self.setup_active_piece is not None:
-                self.setup_puzzle_locations.pop(self.setup_active_piece)
-                if not self.setup_puzzle_locations:
-                    self.setup_puzzle_locations = [""]
-                self.setup_active_piece = min(self.setup_active_piece, len(self.setup_puzzle_locations) - 1)
-                self.setup_piece_scroll = min(self.setup_piece_scroll, max(0, len(self.setup_puzzle_locations) - 3))
-                return
-            if event.key == pygame.K_RETURN:
-                self.stage_message = f"מיקום חלק {self.setup_active_piece + 1} נשמר."
-                return
-            if len(event.unicode) == 1 and event.unicode.isprintable() and self.setup_active_piece is not None:
-                current = self.setup_puzzle_locations[self.setup_active_piece]
-                if len(current) < 120:
-                    self.setup_puzzle_locations[self.setup_active_piece] = current + event.unicode
+
+            if self.setup_active_piece is not None:
+                if event.key == pygame.K_BACKSPACE:
+                    current = self.setup_puzzle_locations[self.setup_active_piece]
+                    self.setup_puzzle_locations[self.setup_active_piece] = current[:-1]
+                    return
+                if event.key == pygame.K_DELETE:
+                    self.setup_puzzle_locations.pop(self.setup_active_piece)
+                    if not self.setup_puzzle_locations:
+                        self.setup_puzzle_locations = [""]
+                    self.setup_active_piece = min(self.setup_active_piece, len(self.setup_puzzle_locations) - 1)
+                    self.setup_piece_scroll = min(self.setup_piece_scroll, max(0, len(self.setup_puzzle_locations) - 3))
+                    return
+                if event.key == pygame.K_RETURN:
+                    self.stage_message = f"מיקום חלק {self.setup_active_piece + 1} נערך."
+                    return
+                if len(event.unicode) == 1 and event.unicode.isprintable():
+                    current = self.setup_puzzle_locations[self.setup_active_piece]
+                    if len(current) < 120:
+                        self.setup_puzzle_locations[self.setup_active_piece] = current + event.unicode
+                    return
+            elif event.key == pygame.K_RETURN:
+                self.start_game()
                 return
 
         if event.type == pygame.MOUSEWHEEL:
@@ -1038,9 +1101,21 @@ class EscapeRoomApp:
             return
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            clue_rect = pygame.Rect(70, 245, 650, 86)
+            server_rect = pygame.Rect(70, 365, 650, 86)
+            if clue_rect.collidepoint(event.pos):
+                self.setup_active_text_field = "clue"
+                self.setup_active_piece = None
+                return
+            if server_rect.collidepoint(event.pos):
+                self.setup_active_text_field = "server"
+                self.setup_active_piece = None
+                return
+
             panel = pygame.Rect(70, 480, 650, 178)
             add_rect = pygame.Rect(panel.right - 92, panel.y + 12, 74, 29)
             if add_rect.collidepoint(event.pos):
+                self.setup_active_text_field = None
                 self.setup_puzzle_locations.append("")
                 self.setup_active_piece = len(self.setup_puzzle_locations) - 1
                 self.setup_piece_scroll = max(0, len(self.setup_puzzle_locations) - 3)
@@ -1054,6 +1129,7 @@ class EscapeRoomApp:
                 rr = pygame.Rect(panel.x + 16, y, panel.w - 98, 29)
                 remove_rect = pygame.Rect(panel.right - 72, y, 52, 29)
                 if remove_rect.collidepoint(event.pos):
+                    self.setup_active_text_field = None
                     self.setup_puzzle_locations.pop(idx)
                     if not self.setup_puzzle_locations:
                         self.setup_puzzle_locations = [""]
@@ -1061,12 +1137,12 @@ class EscapeRoomApp:
                     self.setup_piece_scroll = min(self.setup_piece_scroll, max(0, len(self.setup_puzzle_locations) - 3))
                     return
                 if rr.collidepoint(event.pos):
+                    self.setup_active_text_field = None
                     self.setup_active_piece = idx
                     return
 
             if self.setup_buttons[0].rect.collidepoint(event.pos):
-                count = len([x for x in self.setup_puzzle_locations if x.strip()])
-                self.stage_message = f"ההגדרות נשמרו • {count} מיקומי פאזל."
+                self.save_setup_config()
             elif self.setup_buttons[1].rect.collidepoint(event.pos):
                 self.start_game()
             elif self.setup_buttons[2].rect.collidepoint(event.pos):
