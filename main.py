@@ -1417,6 +1417,22 @@ class StageManager:
             self.transition_started_at = time.monotonic()
             self.app.audio.play("transition" if previous_stage == 1 else "unlock")
 
+        completion_message = str(self.app.stage_message or "").upper()
+        clear_markers = (
+            "COLLAPSED", "CLEARED", "CRACKED", "SECURED", "DECRYPTED",
+            "ACCEPTED", "VERIFIED", "STABLE"
+        )
+        if (previous_stage >= 3 and stage == previous_stage + 1
+                and any(marker in completion_message for marker in clear_markers)):
+            elapsed = max(0.0, time.monotonic() - self.app.stage_started_at)
+            speed_bonus = int(60 * max(0.0, 1.0 - min(elapsed, 180.0) / 180.0))
+            self.app.last_score_gain = 150 + speed_bonus
+            self.app.mission_xp += self.app.last_score_gain
+            self.app.stages_cleared += 1
+            self.app.last_cleared_stage = previous_stage
+        else:
+            self.app.last_score_gain = 0
+
         self.stage = stage
         self.app.audio.set_stage(stage)
         self.app.stage_started_at = time.monotonic()
@@ -1529,10 +1545,20 @@ class StageManager:
         draw_text(surface, f"NEXT // PROTOCOL {stage:02d} UNLOCKED", 12,
                   (panel.centerx, panel.y + 112), (255, 174, 105),
                   align="center", mono=True, bold=True)
-        stage_label = self.app.stage_names.get(stage, "UNKNOWN SIGNAL")
-        draw_text(surface, fit_text(stage_label.upper(), 15, panel.w - 62, mono=True, bold=True),
-                  15, (panel.centerx, panel.y + 139), (255, 174, 105),
-                  align="center", mono=True, bold=True)
+        if self.app.last_score_gain > 0:
+            draw_text(surface,
+                      f"+{self.app.last_score_gain:03d} XP  //  TEAM SCORE {self.app.mission_xp:05d}",
+                      14, (panel.centerx, panel.y + 141), (83, 255, 168),
+                      align="center", mono=True, bold=True)
+            stage_label = self.app.stage_names.get(stage, "UNKNOWN SIGNAL")
+            draw_text(surface, fit_text(stage_label.upper(), 12, panel.w - 62, mono=True, bold=True),
+                      12, (panel.centerx, panel.y + 162), (255, 174, 105),
+                      align="center", mono=True, bold=True)
+        else:
+            stage_label = self.app.stage_names.get(stage, "UNKNOWN SIGNAL")
+            draw_text(surface, fit_text(stage_label.upper(), 15, panel.w - 62, mono=True, bold=True),
+                      15, (panel.centerx, panel.y + 145), (255, 174, 105),
+                      align="center", mono=True, bold=True)
 
         # Compact 12-stage progression strip; completed nodes stay lit behind the active node.
         node_w, node_gap = 30, 10
@@ -1720,6 +1746,11 @@ class EscapeRoomApp:
         self.state = "setup"
         self.stage_manager = StageManager(self)
         self.stage_started_at = time.monotonic()
+        self.mission_xp = 0
+        self.stages_cleared = 0
+        self.last_score_gain = 0
+        self.last_cleared_stage = 0
+        self.mistakes = 0
 
         self.players: list[Player] = []
         self.player_name = ""
@@ -2160,6 +2191,7 @@ class EscapeRoomApp:
             if any(value and value != errors_before.get(key, "")
                    for key, value in errors_after.items()):
                 self.audio.play("error")
+                self.mistakes += 1
 
     def handle_secret_keys(self, event):
         """Return True when a privileged operator shortcut consumed the key event."""
