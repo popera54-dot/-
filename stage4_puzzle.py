@@ -35,7 +35,6 @@ class Stage4Controller:
         self.route_input_rect = None
         self.route_verify_button = None
         self.error = ""
-        self._generation_attempt = 0
         self.generate_puzzle()
 
     def start(self):
@@ -148,19 +147,47 @@ class Stage4Controller:
             if len(safe_other_leaves) >= 9:
                 break
 
-        # Keep the maze visually rich with 10 exits while ensuring no decoy
-        # exit's path contains all three required symbols. Some random perfect
-        # mazes place too many dead ends after the third symbol, so regenerate
-        # rather than shipping a map with too few choices.
-        if len(safe_other_leaves) < 9 and self._generation_attempt < 30:
-            self._generation_attempt += 1
-            self.generate_puzzle()
-            return
+        # Guarantee a visually busy board even when this randomized maze has
+        # fewer than nine safe dead ends. Add one-cell terminal branches to
+        # walls whose only open neighbor has not yet passed all three targets.
+        if len(safe_other_leaves) < 9:
+            wall_candidates = [
+                (x, y)
+                for y in range(1, rows - 1)
+                for x in range(1, cols - 1)
+                if self.maze[y][x] == 1
+            ]
+            random.shuffle(wall_candidates)
+            for wx, wy in wall_candidates:
+                if len(safe_other_leaves) >= 9:
+                    break
+                open_neighbors = [
+                    (wx + dx, wy + dy)
+                    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))
+                    if self.maze[wy + dy][wx + dx] == 0
+                ]
+                if len(open_neighbors) != 1:
+                    continue
+                neighbor = open_neighbors[0]
+                # Only attach to the original maze graph, never to another
+                # newly carved branch.
+                if neighbor not in dist:
+                    continue
+                trail = set()
+                node = neighbor
+                while node is not None:
+                    trail.add(node)
+                    node = parent.get(node)
+                if target_cells.issubset(trail):
+                    continue
+                self.maze[wy][wx] = 0
+                safe_other_leaves.append((wx, wy))
 
-        self._generation_attempt = 0
         self.exits = [(self.finish_cell, 15)]
         for cell, number in zip(safe_other_leaves[:9], self.EXIT_NUMBERS):
             self.exits.append((cell, number))
+        for cell, _ in self.exits:
+            self.decoy_items.pop(cell, None)
 
     def _draw_icon(self, surface, name, center, scale, pygame):
         x, y = center
