@@ -761,16 +761,51 @@ class AudioDirector:
         self.sounds = {}
         self.effect_base_volumes = {}
         self.ambient_sound = None
-        self.ambient_base_volume = 0.62
+        self.ambient_base_volume = 0.82
         self.ambient_channel = None
-        self.ambient_requested = False
+        self.ambient_requested = True
+        self.settings_path = DATA_DIR / "audio_settings.json"
         self.stage = 0
         self.last_countdown_second = None
         self.last_alarm_marker = None
         self.last_heartbeat_second = None
         self._ambient_level_cache = None
         self._last_played = {}
+        self._load_preferences()
         self._build()
+        if not self.enabled and pygame.mixer.get_init():
+            pygame.mixer.pause()
+
+    def _load_preferences(self):
+        """Load sound preferences without making a missing/corrupt file fatal."""
+        try:
+            settings = json.loads(self.settings_path.read_text(encoding="utf-8"))
+            if not isinstance(settings, dict):
+                return
+            self.enabled = bool(settings.get("enabled", self.enabled))
+            self.master_volume = clamp(float(settings.get("master_volume", self.master_volume)),
+                                       0.25, 1.0)
+            self.ambient_requested = bool(settings.get("ambient_enabled", self.ambient_requested))
+        except (OSError, ValueError, TypeError):
+            pass
+
+    def _save_preferences(self):
+        """Persist user audio preferences atomically; read-only folders remain safe."""
+        payload = {
+            "enabled": bool(self.enabled),
+            "master_volume": round(clamp(float(self.master_volume), 0.25, 1.0), 2),
+            "ambient_enabled": bool(self.ambient_requested),
+        }
+        temporary_path = self.settings_path.with_suffix(self.settings_path.suffix + ".tmp")
+        try:
+            self.settings_path.parent.mkdir(parents=True, exist_ok=True)
+            temporary_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+            temporary_path.replace(self.settings_path)
+        except (OSError, ValueError, TypeError):
+            try:
+                temporary_path.unlink(missing_ok=True)
+            except OSError:
+                pass
 
     def bind_app(self, app):
         self.app = app
@@ -891,17 +926,35 @@ class AudioDirector:
         return self._wave_to_sound(wave, volume, gain=19000.0, stereo_width=0.025)
 
     def _build_ambient(self, sample_rate):
-        # Every oscillator and the breathing envelope complete whole cycles over eight seconds.
+        """Build an eight-second seamless, layered cyber-thriller ambience loop."""
         duration = 8.0
         t = np.arange(int(sample_rate * duration), dtype=np.float32) / float(sample_rate)
+
+        # A sub drone, fifth, and upper harmonics create weight without a loud alarm.
         breath = 0.78 + 0.22 * np.sin(2 * np.pi * 0.125 * t)
-        wave = breath * (
+        low_bed = (
             0.17 * np.sin(2 * np.pi * 55.0 * t)
             + 0.115 * np.sin(2 * np.pi * 82.5 * t + 0.12)
             + 0.068 * np.sin(2 * np.pi * 110.0 * t + 0.35)
             + 0.028 * np.sin(2 * np.pi * 165.0 * t + 0.64)
         )
-        return self._wave_to_sound(wave, 0.62, gain=7200.0, stereo_width=0.075)
+        wave = breath * low_bed
+
+        # A softly moving, in-tune upper pad and a restrained four-note signal motif.
+        shimmer_phase = 2 * np.pi * 220.0 * t + 1.25 * np.sin(2 * np.pi * 0.125 * t)
+        shimmer_envelope = 0.68 + 0.32 * np.sin(2 * np.pi * 0.25 * t + 0.4)
+        wave += 0.034 * np.sin(shimmer_phase) * shimmer_envelope
+        wave += 0.016 * np.sin(2 * np.pi * 330.0 * t + 0.8 * np.sin(2 * np.pi * 0.125 * t))
+
+        # Quiet plucked notes add forward motion; their tails end before the loop seam.
+        motif = (164.81, 146.83, 123.47, 146.83)
+        for index, start in enumerate((0.18, 2.18, 4.18, 6.18)):
+            self._add_note(wave, t, start, 0.62, motif[index], 0.055, decay=4.2)
+        for start, frequency in ((0.82, 659.25), (4.82, 587.33)):
+            self._add_note(wave, t, start, 0.36, frequency, 0.020, decay=6.3)
+
+        # Lower volume is deliberate: puzzle tones and spoken teamwork must stay clear.
+        return self._wave_to_sound(wave, 0.82, gain=12500.0, stereo_width=0.11)
 
     def _build(self):
         try:
@@ -934,7 +987,12 @@ class AudioDirector:
         if sound is None:
             return False
         now = time.monotonic()
-        cooldown = 0.065 if name == "click" else 0.10 if name in ("confirm", "tick") else 0.0
+        cooldown = (
+            0.24 if name == "error"
+            else 0.065 if name == "click"
+            else 0.10 if name in ("confirm", "tick")
+            else 0.0
+        )
         if now - self._last_played.get(name, -1000.0) < cooldown:
             return False
         self._last_played[name] = now
@@ -965,21 +1023,21 @@ class AudioDirector:
             pass
 
     def _ambient_target_level(self, remaining_seconds=None):
-        # Duck the drone under the number-by-frequency puzzle so every note remains clear.
+        # Duck the ambience during the frequency puzzle so the clue tones stay crystal clear.
         if self.stage == 8:
-            return 0.065
+            return 0.085
 
-        level = 0.25 if self.stage in (9, 11) else 0.17
+        level = 0.36 if self.stage in (9, 11) else 0.29
         if remaining_seconds is not None:
             remaining = max(0, int(remaining_seconds))
             if remaining <= 30:
-                level = max(level, 0.29)
+                level = max(level, 0.48)
             elif remaining <= 60:
-                level = max(level, 0.25)
+                level = max(level, 0.44)
             elif remaining <= 180:
-                level = max(level, 0.22)
+                level = max(level, 0.40)
             elif remaining <= 300:
-                level = max(level, 0.19)
+                level = max(level, 0.34)
         return level
 
     def _set_ambient_level(self, remaining_seconds=None, *, force=False):
@@ -1032,6 +1090,7 @@ class AudioDirector:
         self.master_volume = round(clamp(old + float(delta), 0.25, 1.0), 2)
         if self.master_volume != old:
             self._apply_volume()
+            self._save_preferences()
         return self.master_volume
 
     def toggle_ambient(self):
@@ -1043,6 +1102,7 @@ class AudioDirector:
             self.stop_ambient()
             return False
         self.start_ambient()
+        self._save_preferences()
         return True
 
     def set_stage(self, stage):
@@ -1055,8 +1115,11 @@ class AudioDirector:
 
     def start_game(self):
         self.last_countdown_second = None
-        self.start_ambient()
-        self.play("intrusion")
+        # Respect the user's saved ambience choice instead of silently re-enabling it.
+        if self.ambient_requested:
+            self.start_ambient()
+        if self.enabled:
+            self.play("intrusion")
 
     def update(self, remaining_seconds, stage):
         stage = int(stage)
@@ -1104,6 +1167,7 @@ class AudioDirector:
                     pygame.mixer.pause()
         except (pygame.error, AttributeError, RuntimeError):
             pass
+        self._save_preferences()
         return self.enabled
 
     def draw_status(self, surface, draw_text, width, height):
