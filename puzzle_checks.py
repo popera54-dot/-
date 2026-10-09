@@ -1,4 +1,7 @@
-"""Deterministic checks for puzzles whose answers are fixed by the specification."""
+"""Deterministic checks for fixed-value puzzles and the generated stage-four maze."""
+
+from stage4_puzzle import Stage4Controller
+
 
 def check_stage_3():
     A, B, C, D = 3, 8, 3, 2
@@ -7,6 +10,22 @@ def check_stage_3():
     assert C - D == 1
     assert D + A == 5
     assert f"{A}{B}{C}{D}" == "3832"
+
+
+def check_stage_4():
+    class DummyApp:
+        pass
+
+    puzzle = Stage4Controller(DummyApp())
+    assert puzzle.path[0] == puzzle.start_cell
+    assert puzzle.path[-1] == puzzle.finish_cell
+    assert all(puzzle.maze[y][x] == 0 for x, y in puzzle.path)
+    indices = [puzzle.path.index(puzzle.target_cells[name]) for name in puzzle.TARGETS]
+    assert indices == sorted(indices) and len(set(indices)) == 3
+    exit_numbers = [number for _, number in puzzle.exits]
+    assert exit_numbers.count(15) == 1
+    assert len(exit_numbers) == len(set(exit_numbers))
+    assert not set(puzzle.TARGETS).intersection(set(puzzle.decoy_items.values()))
 
 
 def check_stage_6():
@@ -57,6 +76,7 @@ def check_task_bank():
 
 def run_all():
     check_stage_3()
+    check_stage_4()
     check_stage_6()
     check_stage_7()
     check_stage_8()
