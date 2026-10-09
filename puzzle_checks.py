@@ -27,6 +27,28 @@ def check_stage_4():
     assert len(exit_numbers) == len(set(exit_numbers))
     assert not set(puzzle.TARGETS).intersection(set(puzzle.decoy_items.values()))
 
+    # No other numbered exit may share the complete three-symbol route to 15.
+    parent = {puzzle.start_cell: None}
+    queue = [puzzle.start_cell]
+    while queue:
+        x, y = queue.pop(0)
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nxt = (x + dx, y + dy)
+            if (0 <= nxt[0] < len(puzzle.maze[0]) and
+                0 <= nxt[1] < len(puzzle.maze) and
+                puzzle.maze[nxt[1]][nxt[0]] == 0 and nxt not in parent):
+                parent[nxt] = (x, y)
+                queue.append(nxt)
+
+    target_cells = set(puzzle.target_cells.values())
+    for exit_cell, number in puzzle.exits:
+        trail = set()
+        cell = exit_cell
+        while cell is not None:
+            trail.add(cell)
+            cell = parent[cell]
+        assert target_cells.issubset(trail) == (number == 15)
+
 
 def check_stage_6():
     assert "8421" == "8421"
