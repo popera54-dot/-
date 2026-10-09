@@ -73,4 +73,4 @@ jobs:
           name: TheGreeksAreBack-Windows-x64
           path: dist/TheGreeksAreBack
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 90
