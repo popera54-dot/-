@@ -59,6 +59,12 @@ The visual system combines:
 - Round forms are reserved for meaningful objects (oil drops, optical targets, real scene details), not generic containers.
 - Keep the hierarchy cinematic: large angular frames, compact technical labels, and controlled red/green status indicators.
 
+## Threat presence
+
+- Antiochus should read as a hostile operator: angular armor, a narrow crimson visor, and restrained warning indicators.
+- Avoid a friendly face, cute eye dots, rounded mascot proportions, or glossy office-style cards.
+- Put the fear in silhouette, contrast, and motion; keep puzzle text readable.
+
 ## Typography
 
 Primary UI:

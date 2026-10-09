@@ -361,11 +361,15 @@ class Stage4Controller:
             rounded_panel(surface, rr, (5, 22, 27), (30, 71, 75), 9, 1)
             piece_number, value = locs[idx]
             draw_text(surface, f"חלק {piece_number:02d}", 11,
-                      (rr.x + 10, rr.centery), (255, 194, 78),
-                      align="midleft", mono=True, bold=True)
+                      (rr.right - 10, rr.centery), (255, 194, 78),
+                      align="midright", mono=True, bold=True)
             preview = value if len(value) <= 52 else value[:49] + "..."
-            draw_text(surface, preview, 13, (rr.x + 95, rr.centery),
-                      (226, 235, 237), align="midleft")
+            if any("\u0590" <= char <= "\u05ff" for char in preview):
+                draw_text(surface, preview, 13, (rr.right - 132, rr.centery),
+                          (226, 235, 237), align="midright")
+            else:
+                draw_text(surface, preview, 13, (rr.x + 16, rr.centery),
+                          (226, 235, 237), align="midleft")
 
         if len(locs) > visible:
             draw_text(surface, "גלגלת העכבר = גלילה", 9,

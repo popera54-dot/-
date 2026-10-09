@@ -57,6 +57,7 @@ jobs:
           3. The first launch creates a data folder next to the executable.
           4. Webcam access is needed for registration and face-check stages.
           5. Microphone access is optional; the finale still progresses if it is unavailable.
+          6. If the game crashes, send data/crash.log with your bug report, if that file was created.
 
           Emergency exit: Ctrl + Alt + Shift + Esc.
           '@ | Set-Content -Path "dist/TheGreeksAreBack/HOW_TO_RUN.txt" -Encoding utf8

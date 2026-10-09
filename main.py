@@ -837,13 +837,17 @@ class StageManager:
         pygame.draw.lines(surface, (102, 123, 130), True, helmet, 3)
         visor = [p(-56, -40), p(49, -40), p(72, -15), p(-45, -15)]
         pygame.draw.polygon(surface, (3, 18, 20), visor)
-        pygame.draw.lines(surface, (47, 255, 197), True, visor, 2)
-        pygame.draw.line(surface, (51, 255, 198), p(-44, -28), p(59, -28), 3)
-        for i in range(7):
-            xx = int(cx + (-38 + i * 13) * s)
+        # Crimson threat visor: a single hard horizontal signal, not friendly "LED eyes".
+        pygame.draw.lines(surface, (255, 43, 61), True, visor, 3)
+        pygame.draw.line(surface, (255, 38, 53), p(-44, -28), p(59, -28), 4)
+        for i in range(5):
+            xx = int(cx + (-30 + i * 15) * s)
             yy = int(cy - 28 * s)
-            pygame.draw.line(surface, (76, 255, 202), (xx, yy - int(4 * s)),
-                             (xx, yy + int(4 * s)), 2)
+            pygame.draw.line(surface, (124, 24, 38), (xx, yy - int(5 * s)),
+                             (xx, yy + int(5 * s)), 2)
+        # A sealed lower mask keeps the silhouette severe and mechanical.
+        pygame.draw.lines(surface, (73, 83, 91), False,
+                          [p(-22, 51), p(-12, 58), p(7, 58), p(21, 50)], 2)
         for dx in (-1, 1):
             a, b, c = p(dx * 91, 16), p(dx * 108, 31), p(dx * 91, 44)
             pygame.draw.lines(surface, (221, 180, 91), False, [a, b, c], 3)
@@ -1065,7 +1069,20 @@ class EscapeRoomApp:
 
         # Large hero composition
         art = pygame.Rect(WIDTH - 520, 80, 390, 470)
-        rounded_panel(surface, art, (4, 14, 20, 235), (38, 81, 88), 28, 1)
+        rounded_panel(surface, art, (3, 8, 14, 248), (123, 31, 47), 28, 2)
+        draw_text(surface, "TARGET LOCK // HOSTILE PROCESS", 10,
+                  (art.x + 20, art.y + 19), (255, 57, 76), mono=True, bold=True)
+        pygame.draw.line(surface, (152, 29, 47), (art.x + 20, art.y + 39),
+                         (art.right - 20, art.y + 39), 2)
+        # Broken telemetry bars make the threat panel feel like a compromised terminal.
+        for i, w in enumerate((44, 20, 61, 31, 12, 52, 26)):
+            yy = art.y + 67 + i * 13
+            pygame.draw.rect(surface, (66, 20, 31), (art.x + 18, yy, 64, 3))
+            pygame.draw.rect(surface, (255, 42, 62), (art.x + 18, yy, w, 3))
+        for i, w in enumerate((21, 50, 15, 38, 59, 18, 42)):
+            yy = art.y + 67 + i * 13
+            pygame.draw.rect(surface, (66, 20, 31), (art.right - 82, yy, 64, 3))
+            pygame.draw.rect(surface, (255, 42, 62), (art.right - 82, yy, w, 3))
         self.stage_manager.draw_hacker(surface, art.center, 105,
                                        (math.sin(time.monotonic() * 3) + 1) * 0.5)
         draw_text(surface, "ANTIOCHUS 2.0", 17, (art.centerx, art.bottom - 50),
@@ -1084,7 +1101,7 @@ class EscapeRoomApp:
         if self.stage_message:
             draw_text(surface, self.stage_message, 12, (WIDTH / 2, HEIGHT - 48),
                       (255, 204, 100), align="center", bold=True)
-        draw_text(surface, "SAFE KIOSK  •  NO SYSTEM SECURITY DISABLED  •  OPERATOR EXIT ENABLED",
+        draw_text(surface, "ISOLATED GAME MODE  //  WINDOWS SECURITY UNCHANGED  //  OPERATOR EXIT ENABLED",
                   12, (WIDTH / 2, HEIGHT - 20), (80, 103, 108), align="center", mono=True)
 
     def load_setup_config(self):
