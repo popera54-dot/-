@@ -234,6 +234,162 @@ def _scan_beam_layer(width: int, height: int = 90):
     return beam
 
 
+
+def draw_intrusion_monitor(surface, rect, t=0.0, *, silhouette=True, compact=False):
+    """Cinematic breached-system display inspired by an ominous green control-room screen.
+
+    The intruder is only a featureless shadow under a hood: no cartoon face,
+    helmet, glowing eyes, or mascot-like character.
+    """
+    r = pygame.Rect(rect)
+    if r.w < 80 or r.h < 90:
+        return
+
+    cut = max(6, min(24, min(r.w, r.h) // 18))
+    bezel = [
+        (r.left + cut, r.top), (r.right - cut - 1, r.top),
+        (r.right - 1, r.top + cut), (r.right - 1, r.bottom - cut - 1),
+        (r.right - cut - 1, r.bottom - 1), (r.left + cut, r.bottom - 1),
+        (r.left, r.bottom - cut - 1), (r.left, r.top + cut),
+    ]
+    pygame.draw.polygon(surface, (4, 12, 12), bezel)
+    pygame.draw.lines(surface, (24, 92, 67), True, bezel, 2)
+
+    screen = r.inflate(-12, -12)
+    screen.inflate_ip(-2, -2)
+    pygame.draw.rect(surface, (1, 8, 7), screen)
+    pygame.draw.rect(surface, (28, 133, 83), screen, 1)
+    pygame.draw.line(surface, (68, 224, 143), (screen.left + 8, screen.top + 2),
+                     (screen.right - 8, screen.top + 2), 1)
+
+    # Data streams: stable columns whose contents move like live telemetry.
+    glyphs = "013579ACEFKMNX<>/\\[]{}:;+=#"
+    step_x = max(13, min(23, screen.w // 50))
+    glyph_size = max(8, min(13, screen.w // 92))
+    stream_rows = max(5, min(32, screen.h // max(10, glyph_size + 4)))
+    stream_h = max(1, screen.h - 28)
+    for col_index, x in enumerate(range(screen.left + 10, screen.right - 8, step_x)):
+        offset = int((t * (14 + (col_index * 11) % 31) + col_index * 29) % stream_h)
+        for row_index in range(stream_rows):
+            y = screen.top + 9 + (offset - row_index * (glyph_size + 3)) % stream_h
+            code = glyphs[(col_index * 7 + row_index * 13 + int(t * 1.7)) % len(glyphs)]
+            bright = row_index == 0 or col_index % 11 == 0
+            color = (81, 255, 157) if bright else (25, 112 + (col_index % 5) * 5, 69)
+            draw_text(surface, code, glyph_size, (x, y), color, mono=True, align="center")
+
+    sx, sy, sw, sh = screen.x, screen.y, screen.w, screen.h
+    cx = sx + sw // 2
+    # Luminous data filaments sweep around the unknown intruder like cables in a breached server room.
+    for i in range(22):
+        side = -1 if i % 2 == 0 else 1
+        band = i // 2
+        y0 = sy + int(sh * (0.22 + (band % 9) * 0.073))
+        y3 = sy + int(sh * (0.19 + ((band * 3) % 9) * 0.078))
+        margin = int(sw * (0.025 + (band % 5) * 0.018))
+        x0 = sx + margin if side < 0 else sx + sw - margin
+        x3 = cx + side * int(sw * (0.16 + (band % 5) * 0.025))
+        p0 = (x0, y0)
+        p1 = (sx + int(sw * (0.24 + (band % 4) * 0.035)) if side < 0
+              else sx + sw - int(sw * (0.24 + (band % 4) * 0.035)),
+              sy + int(sh * (0.02 + (band % 4) * 0.16)))
+        p2 = (cx + side * int(sw * (0.34 + (band % 3) * 0.035)),
+              sy + int(sh * (0.94 - (band % 5) * 0.13)))
+        p3 = (x3, y3)
+        curve = []
+        for j in range(29):
+            u = j / 28
+            v = 1 - u
+            px = v**3 * p0[0] + 3 * v**2 * u * p1[0] + 3 * v * u**2 * p2[0] + u**3 * p3[0]
+            py = v**3 * p0[1] + 3 * v**2 * u * p1[1] + 3 * v * u**2 * p2[1] + u**3 * p3[1]
+            curve.append((int(px), int(py)))
+        tint = (39, 180 + (band % 3) * 20, 100) if i % 4 else (89, 255, 164)
+        pygame.draw.lines(surface, tint, False, curve, 2 if i % 5 == 0 else 1)
+
+    if silhouette:
+        # Hood and shoulders read as one ominous silhouette, with absolutely no facial detail.
+        base = screen.bottom - 2
+        shoulder_y = sy + int(sh * 0.62)
+        body = [
+            (cx - int(sw * 0.30), base),
+            (cx - int(sw * 0.29), sy + int(sh * 0.79)),
+            (cx - int(sw * 0.25), sy + int(sh * 0.65)),
+            (cx - int(sw * 0.19), shoulder_y),
+            (cx - int(sw * 0.12), sy + int(sh * 0.54)),
+            (cx - int(sw * 0.10), sy + int(sh * 0.44)),
+            (cx + int(sw * 0.10), sy + int(sh * 0.44)),
+            (cx + int(sw * 0.12), sy + int(sh * 0.54)),
+            (cx + int(sw * 0.19), shoulder_y),
+            (cx + int(sw * 0.25), sy + int(sh * 0.65)),
+            (cx + int(sw * 0.29), sy + int(sh * 0.79)),
+            (cx + int(sw * 0.30), base),
+        ]
+        pygame.draw.polygon(surface, (1, 6, 6), body)
+        pygame.draw.lines(surface, (13, 54, 43), False, body[1:6], 2)
+        pygame.draw.lines(surface, (13, 54, 43), False, body[6:11], 2)
+
+        hood = [
+            (cx - int(sw * 0.105), sy + int(sh * 0.47)),
+            (cx - int(sw * 0.145), sy + int(sh * 0.37)),
+            (cx - int(sw * 0.155), sy + int(sh * 0.27)),
+            (cx - int(sw * 0.12), sy + int(sh * 0.20)),
+            (cx - int(sw * 0.06), sy + int(sh * 0.16)),
+            (cx, sy + int(sh * 0.145)),
+            (cx + int(sw * 0.06), sy + int(sh * 0.16)),
+            (cx + int(sw * 0.12), sy + int(sh * 0.20)),
+            (cx + int(sw * 0.155), sy + int(sh * 0.27)),
+            (cx + int(sw * 0.145), sy + int(sh * 0.37)),
+            (cx + int(sw * 0.105), sy + int(sh * 0.47)),
+        ]
+        pygame.draw.polygon(surface, (3, 12, 12), hood)
+        pygame.draw.lines(surface, (35, 119, 78), False, hood, 2)
+        face_void = [
+            (cx - int(sw * 0.105), sy + int(sh * 0.255)),
+            (cx - int(sw * 0.075), sy + int(sh * 0.225)),
+            (cx, sy + int(sh * 0.215)),
+            (cx + int(sw * 0.075), sy + int(sh * 0.225)),
+            (cx + int(sw * 0.105), sy + int(sh * 0.255)),
+            (cx + int(sw * 0.09), sy + int(sh * 0.38)),
+            (cx + int(sw * 0.055), sy + int(sh * 0.455)),
+            (cx - int(sw * 0.055), sy + int(sh * 0.455)),
+            (cx - int(sw * 0.09), sy + int(sh * 0.38)),
+        ]
+        pygame.draw.polygon(surface, (0, 3, 4), face_void)
+        # A restrained green rim catches the hood; there are no eyes or artificial face marks.
+        pygame.draw.lines(surface, (25, 82, 58), False,
+                          [hood[1], hood[2], hood[3], hood[4], hood[5]], 1)
+        pygame.draw.line(surface, (19, 72, 50),
+                         (cx - int(sw * 0.14), sy + int(sh * 0.72)),
+                         (cx - int(sw * 0.19), base - 6), 1)
+        pygame.draw.line(surface, (19, 72, 50),
+                         (cx + int(sw * 0.14), sy + int(sh * 0.72)),
+                         (cx + int(sw * 0.19), base - 6), 1)
+
+        title_size = max(16, min(31, sw // 38))
+        sub_size = max(12, min(23, sw // 50))
+        draw_text(surface, "SYSTEM COMPROMISED!", title_size,
+                  (cx, sy + int(sh * 0.035)), (255, 143, 107), align="midtop",
+                  mono=True, bold=True)
+        draw_text(surface, "UNLOCK THE FIREWALL", sub_size,
+                  (cx, sy + int(sh * 0.085)), (255, 157, 119), align="midtop",
+                  mono=True, bold=True)
+        draw_text(surface, "TO REGAIN CONTROL!", sub_size,
+                  (cx, sy + int(sh * 0.125)), (255, 157, 119), align="midtop",
+                  mono=True, bold=True)
+    else:
+        size = max(9, min(13, sw // 30))
+        draw_text(surface, "HOSTILE SIGNAL // UNKNOWN", size,
+                  (cx, sy + 14), (255, 132, 103), align="midtop", mono=True, bold=True)
+        draw_text(surface, "TRACE ORIGIN: MASKED", max(8, size - 2),
+                  (cx, sy + 34), (57, 207, 136), align="midtop", mono=True)
+        # Tiny signal bars and a broken link indicator; the panel stays abstract, not character-led.
+        for i, width in enumerate((sw * 0.23, sw * 0.13, sw * 0.31, sw * 0.18, sw * 0.27)):
+            bar = pygame.Rect(sx + 18, sy + int(sh * 0.70) + i * 12, int(width), 3)
+            pygame.draw.rect(surface, (12, 43, 32), bar.inflate(2, 2))
+            pygame.draw.rect(surface, (36, 199, 117), bar)
+        draw_text(surface, "CONNECTION ACTIVE  /  0x7F", max(8, size - 2),
+                  (sx + 18, screen.bottom - 22), (96, 170, 135), mono=True)
+
+
 def draw_grid(surface, horizon_y=None):
     horizon_y = horizon_y or int(HEIGHT * 0.62)
     col = (26, 68, 72)
@@ -813,100 +969,25 @@ class StageManager:
 
     def draw_stage_1(self, surface):
         elapsed = time.monotonic() - self.app.stage_started_at
-        pulse = (math.sin(elapsed * 4.8) + 1) * 0.5
         self.app.background.draw(surface, danger=min(1.0, elapsed / 2.5))
 
-        # Hostile terminal shards: dark error panels instead of bright, office-like popups.
-        if elapsed < 2.9:
-            for i in range(13):
-                x = int((i * 173 + elapsed * (30 + i * 8)) % (WIDTH - 280))
-                y = int((i * 59 + abs(math.sin(elapsed * 5 + i)) * 300) % (HEIGHT - 90))
-                rect = pygame.Rect(x, y, 260, 64)
-                pulse_red = 130 + int(90 * (0.5 + 0.5 * math.sin(elapsed * 9 + i)))
-                rounded_panel(surface, rect, (3, 7, 12, 246),
-                              (pulse_red, 24, 43), 9, 1)
-                pygame.draw.line(surface, (255, 43, 64),
-                                 (rect.x + 10, rect.y + 31),
-                                 (rect.right - 10, rect.y + 31), 1)
-                draw_text(surface, "KERNEL PANIC // ACCESS LOST", 10,
-                          (x + 12, y + 10), (255, 70, 87), mono=True, bold=True)
-                draw_text(surface, "TRACE 0x" + format((i * 917 + int(elapsed * 99)) % 65535, "04X"),
-                          11, (x + 12, y + 43), (155, 180, 184), mono=True)
-                # Short glitch bar changes position every frame, like a corrupted signal.
-                glitch_x = rect.x + 150 + ((int(elapsed * 370) + i * 19) % 78)
-                pygame.draw.rect(surface, (255, 40, 61), (glitch_x, rect.y + 37, 18, 3))
+        # One dominant cinematic display replaces the old scattered popups and cartoon avatar.
+        display_rect = pygame.Rect(218, 72, WIDTH - 436, HEIGHT - 224)
+        draw_intrusion_monitor(surface, display_rect, elapsed, silhouette=True)
 
-        # Live hacker terminal status strip.
-        status_y = 112
-        draw_text(surface, ">> SECURE SHELL // ANTIOCHUS-2.0", 13,
-                  (34, status_y), (63, 255, 178), mono=True, bold=True)
-        draw_text(surface, f"TRACE:{int(elapsed * 73) % 9999:04d}  NODE:MK-{random.randint(10,99)}  SIGNAL:ACTIVE",
-                  12, (34, status_y + 24), (145, 54, 68), mono=True)
-        draw_text(surface, "01010111 01100001 01110010 01101110 01101001 01101110 01100111",
-                  11, (34, status_y + 48), (31, 125, 91), mono=True)
-
-        # Hacker alert
-        if elapsed >= 2.0:
-            y = HEIGHT * 0.36
-            draw_text(surface, "⚠  WARNING  ⚠", 32, (WIDTH / 2, y - 62),
-                      (255, 51, 73), align="center", mono=True, bold=True)
-            if elapsed < 7.2:
-                alpha_color = (255, 255, 255)
-                draw_text(surface, "REMOTE INTRUSION DETECTED", 56,
-                          (WIDTH / 2, y), alpha_color, align="center", mono=True, bold=True)
-                draw_text(surface, "מערכת ההפעלה נחסמה  •  קוד קיוסק יווני הופעל",
-                          24, (WIDTH / 2, y + 54), (165, 225, 218), align="center", bold=True)
-
-        # Antiochus avatar
-        if elapsed >= 4.0:
-            self.draw_hacker(surface, (WIDTH / 2, HEIGHT * 0.60), 150, pulse)
-
-            rounded_panel(surface,
-                          pygame.Rect(WIDTH // 2 - 330, HEIGHT - 150, 660, 82),
-                          (5, 12, 18, 235), (255, 52, 72), 18, 2)
-            draw_text(surface, "ANTIOCHUS 2.0  //  ACTIVE SESSION", 14,
-                      (WIDTH / 2, HEIGHT - 130), (255, 75, 90), align="center", mono=True, bold=True)
-            draw_text(surface, '"המחשב שלכם שייך לי כעת. השעון מתחיל... עכשיו."',
-                      18, (WIDTH / 2, HEIGHT - 99), (235, 245, 247), align="center")
+        # The system speaks from the terminal rather than through a mascot.
+        if elapsed >= 3.2:
+            quote_rect = pygame.Rect(WIDTH // 2 - 430, HEIGHT - 139, 860, 62)
+            rounded_panel(surface, quote_rect, (2, 9, 8, 238), (36, 128, 79), 10, 1)
+            draw_text(surface, "ANTIOCHUS 2.0  //  REMOTE SESSION ACTIVE", 12,
+                      (WIDTH // 2, quote_rect.y + 10), (71, 218, 140),
+                      align="midtop", mono=True, bold=True)
+            draw_text(surface, '"המחשב שלכם שייך לי כעת. השעון מתחיל... עכשיו."', 18,
+                      (WIDTH // 2, quote_rect.y + 32), (227, 239, 231),
+                      align="midtop")
 
         if elapsed > 8.8:
             self.goto(2)
-
-    def draw_hacker(self, surface, center, radius, pulse):
-        cx, cy = center
-        glow_circle(surface, center, radius + 50, (255, 44, 58), 13)
-        # Angular armored silhouette: deliberately severe, not a soft cartoon face.
-        s = radius / 105.0
-        def p(x, y):
-            return (int(cx + x * s), int(cy + y * s))
-
-        cloak = [p(-118, 136), p(-101, 82), p(-69, 51), p(-43, 34),
-                 p(43, 34), p(69, 51), p(101, 82), p(118, 136)]
-        pygame.draw.polygon(surface, (11, 16, 22), cloak)
-        pygame.draw.lines(surface, (45, 74, 79), True, cloak, 2)
-
-        helmet = [p(-67, -67), p(-54, -98), p(-25, -119), p(31, -115),
-                  p(66, -82), p(68, 14), p(43, 42), p(-43, 42), p(-67, 14)]
-        pygame.draw.polygon(surface, (27, 34, 42), helmet)
-        pygame.draw.lines(surface, (102, 123, 130), True, helmet, 3)
-        visor = [p(-56, -40), p(49, -40), p(72, -15), p(-45, -15)]
-        pygame.draw.polygon(surface, (3, 18, 20), visor)
-        # Crimson threat visor: a single hard horizontal signal, not friendly "LED eyes".
-        pygame.draw.lines(surface, (255, 43, 61), True, visor, 3)
-        pygame.draw.line(surface, (255, 38, 53), p(-44, -28), p(59, -28), 4)
-        for i in range(5):
-            xx = int(cx + (-30 + i * 15) * s)
-            yy = int(cy - 28 * s)
-            pygame.draw.line(surface, (124, 24, 38), (xx, yy - int(5 * s)),
-                             (xx, yy + int(5 * s)), 2)
-        # A sealed lower mask keeps the silhouette severe and mechanical.
-        pygame.draw.lines(surface, (73, 83, 91), False,
-                          [p(-22, 51), p(-12, 58), p(7, 58), p(21, 50)], 2)
-        for dx in (-1, 1):
-            a, b, c = p(dx * 91, 16), p(dx * 108, 31), p(dx * 91, 44)
-            pygame.draw.lines(surface, (221, 180, 91), False, [a, b, c], 3)
-        draw_text(surface, "ΑΝΤΙΟΧΟΣ 2.0", 13, (cx, cy + 118), (210, 170, 90),
-                  align="center", mono=True, bold=True)
 
     def draw_stage_2(self, surface):
         self.app.background.draw(surface)
@@ -1130,28 +1211,10 @@ class EscapeRoomApp:
         draw_text(surface, "THREAT CLASS // HOSTILE  |  TRACE STATUS // ACTIVE",
                   11, (70, 218), (255, 72, 88), mono=True, bold=True)
 
-        # Large hero composition
+        # The operator console shows an abstract hostile signal feed, not a mascot.
         art = pygame.Rect(WIDTH - 520, 80, 390, 470)
-        rounded_panel(surface, art, (3, 8, 14, 248), (123, 31, 47), 28, 2)
-        draw_text(surface, "TARGET LOCK // HOSTILE PROCESS", 10,
-                  (art.x + 20, art.y + 19), (255, 57, 76), mono=True, bold=True)
-        pygame.draw.line(surface, (152, 29, 47), (art.x + 20, art.y + 39),
-                         (art.right - 20, art.y + 39), 2)
-        # Broken telemetry bars make the threat panel feel like a compromised terminal.
-        for i, w in enumerate((44, 20, 61, 31, 12, 52, 26)):
-            yy = art.y + 67 + i * 13
-            pygame.draw.rect(surface, (66, 20, 31), (art.x + 18, yy, 64, 3))
-            pygame.draw.rect(surface, (255, 42, 62), (art.x + 18, yy, w, 3))
-        for i, w in enumerate((21, 50, 15, 38, 59, 18, 42)):
-            yy = art.y + 67 + i * 13
-            pygame.draw.rect(surface, (66, 20, 31), (art.right - 82, yy, 64, 3))
-            pygame.draw.rect(surface, (255, 42, 62), (art.right - 82, yy, w, 3))
-        self.stage_manager.draw_hacker(surface, art.center, 105,
-                                       (math.sin(time.monotonic() * 3) + 1) * 0.5)
-        draw_text(surface, "ANTIOCHUS 2.0", 17, (art.centerx, art.bottom - 50),
-                  (240, 196, 105), align="center", mono=True, bold=True)
-        draw_text(surface, "SECURITY CORE // READY", 12, (art.centerx, art.bottom - 24),
-                  (70, 255, 204), align="center", mono=True)
+        draw_intrusion_monitor(surface, art, time.monotonic() * 0.7,
+                               silhouette=False, compact=True)
 
         # Setup fields rendered as stylized cards
         self.setup_field(surface, 70, 245, 650, "STAGE 03  //  CLUE LOCATION", self.setup_clue_location, "clue")
