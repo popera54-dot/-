@@ -895,10 +895,10 @@ class EscapeRoomApp:
         }
 
         self.setup_buttons = [
-            Button((WIDTH * 0.18, HEIGHT * 0.74, WIDTH * 0.18, 62), "שמור הגדרות"),
-            Button((WIDTH * 0.41, HEIGHT * 0.74, WIDTH * 0.20, 62), "נעל מחשב והפעל משחק",
+            Button((WIDTH * 0.18, HEIGHT * 0.86, WIDTH * 0.18, 62), "שמור הגדרות"),
+            Button((WIDTH * 0.41, HEIGHT * 0.86, WIDTH * 0.20, 62), "נעל מחשב והפעל משחק",
                    (255, 58, 82), "START // KIOSK"),
-            Button((WIDTH * 0.66, HEIGHT * 0.74, WIDTH * 0.16, 62), "מצב תצוגה",
+            Button((WIDTH * 0.66, HEIGHT * 0.86, WIDTH * 0.16, 62), "מצב תצוגה",
                    (120, 166, 255)),
         ]
 
