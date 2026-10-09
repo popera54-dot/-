@@ -1252,7 +1252,9 @@ class Stage5Controller:
 
     @property
     def current_task(self):
-        return self.tasks[self.current_task_index] if self.tasks else None
+        if not 0 <= self.current_task_index < len(self.tasks):
+            return None
+        return self.tasks[self.current_task_index]
 
     def begin_verification(self):
         self.phase = "verify"
