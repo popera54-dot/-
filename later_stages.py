@@ -275,8 +275,13 @@ class LaterStagesController:
                         self.audio_group += 1
                         self.audio_beep = 0
                         if self.audio_group >= len(self.signal_groups):
-                            self.phase = "verify" if self.app.players else "code"
-                            self.verify_index = 0
+                            if self.replay_only:
+                                # Replay is an audio aid after biometric checks, not a new round.
+                                self.phase = "code"
+                                self.replay_only = False
+                            else:
+                                self.phase = "verify" if self.app.players else "code"
+                                self.verify_index = 0
                             break
                         self.next_beep_at += 0.72
                         self._make_beep()
