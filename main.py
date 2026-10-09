@@ -749,19 +749,26 @@ class AudioDirector:
         "puzzle": (0.78, 0.28), "unlock": (1.04, 0.30),
         "transition": (0.34, 0.18), "error": (0.36, 0.20),
         "intrusion": (1.32, 0.28), "tick": (0.095, 0.14),
-        "urgent_tick": (0.16, 0.18), "victory": (1.82, 0.34),
+        "urgent_tick": (0.16, 0.18), "heartbeat": (0.43, 0.14),
+        "victory": (1.82, 0.34),
     }
 
     def __init__(self):
         self.app = None
         self.enabled = True
         self.available = False
+        self.master_volume = 0.78
         self.sounds = {}
+        self.effect_base_volumes = {}
         self.ambient_sound = None
+        self.ambient_base_volume = 0.62
         self.ambient_channel = None
         self.ambient_requested = False
         self.stage = 0
         self.last_countdown_second = None
+        self.last_alarm_marker = None
+        self.last_heartbeat_second = None
+        self._ambient_level_cache = None
         self._last_played = {}
         self._build()
 
@@ -853,6 +860,18 @@ class AudioDirector:
         elif name == "urgent_tick":
             self._add_note(wave, t, 0.0, 0.095, 520.0, 0.20, decay=25, glide=-80)
             self._add_note(wave, t, 0.045, 0.095, 880.0, 0.14, decay=30, glide=-160)
+        elif name == "heartbeat":
+            # Soft low-frequency double pulse; suspenseful without a harsh alarm tone.
+            for start, duration, frequency, amplitude in (
+                (0.00, 0.17, 68.0, 0.28), (0.19, 0.22, 52.0, 0.22)
+            ):
+                active = (t >= start) & (t < start + duration)
+                local = t[active] - start
+                swell = np.sin(np.pi * np.clip(local / duration, 0.0, 1.0)) ** 1.5
+                wave[active] += amplitude * swell * (
+                    np.sin(2.0 * np.pi * (frequency * local - 13.0 * local * local))
+                    + 0.20 * np.sin(2.0 * np.pi * frequency * 2.0 * local)
+                )
         elif name == "victory":
             for start, freq, amp in (
                 (0.02, 392.0, 0.20), (0.20, 523.25, 0.19), (0.41, 659.25, 0.18),
@@ -895,9 +914,11 @@ class AudioDirector:
                 sound = self._build_effect(name, sample_rate)
                 if sound is not None:
                     self.sounds[name] = sound
+                    self.effect_base_volumes[name] = self.EFFECTS[name][1]
             self.ambient_sound = self._build_ambient(sample_rate)
             self.ambient_channel = pygame.mixer.Channel(15)
             self.available = bool(self.sounds)
+            self._apply_volume()
         except (pygame.error, ValueError, TypeError, RuntimeError):
             self.sounds = {}
             self.ambient_sound = None
@@ -941,13 +962,76 @@ class AudioDirector:
         except pygame.error:
             pass
 
-    def _set_ambient_level(self):
-        if self.ambient_channel is not None:
-            level = 0.25 if self.stage in (8, 9, 11) else 0.17
+    def _ambient_target_level(self, remaining_seconds=None):
+        level = 0.25 if self.stage in (8, 9, 11) else 0.17
+        if remaining_seconds is not None:
+            remaining = max(0, int(remaining_seconds))
+            if remaining <= 30:
+                level = max(level, 0.29)
+            elif remaining <= 60:
+                level = max(level, 0.25)
+            elif remaining <= 180:
+                level = max(level, 0.22)
+            elif remaining <= 300:
+                level = max(level, 0.19)
+        return level
+
+    def _set_ambient_level(self, remaining_seconds=None, *, force=False):
+        if self.ambient_channel is None:
+            return
+        level = self._ambient_target_level(remaining_seconds)
+        if not force and level == self._ambient_level_cache:
+            return
+        try:
+            self.ambient_channel.set_volume(level)
+            self._ambient_level_cache = level
+        except pygame.error:
+            pass
+
+    def _apply_volume(self):
+        """Apply the master level to synthesized effects and ambient audio."""
+        self.master_volume = clamp(float(self.master_volume), 0.25, 1.0)
+        for name, sound in self.sounds.items():
             try:
-                self.ambient_channel.set_volume(level)
+                sound.set_volume(self.effect_base_volumes.get(name, 0.18) * self.master_volume)
             except pygame.error:
                 pass
+        if self.ambient_sound is not None:
+            try:
+                self.ambient_sound.set_volume(self.ambient_base_volume * self.master_volume)
+            except pygame.error:
+                pass
+        if self.ambient_channel is not None:
+            self._ambient_level_cache = None
+            self._set_ambient_level(force=True)
+        if self.app is not None:
+            later = getattr(getattr(self.app, "stage_manager", None), "later", None)
+            if later is not None:
+                if getattr(later, "sound", None) is not None:
+                    try:
+                        later.sound.set_volume(0.24 * self.master_volume)
+                    except pygame.error:
+                        pass
+                channel = getattr(later, "music_channel", None)
+                if channel is not None:
+                    try:
+                        channel.set_volume(0.28 * self.master_volume)
+                    except pygame.error:
+                        pass
+
+    def adjust_volume(self, delta):
+        old = self.master_volume
+        self.master_volume = round(clamp(old + float(delta), 0.25, 1.0), 2)
+        if self.master_volume != old:
+            self._apply_volume()
+        return self.master_volume
+
+    def toggle_ambient(self):
+        if self.ambient_requested:
+            self.stop_ambient()
+            return False
+        self.start_ambient()
+        return True
 
     def set_stage(self, stage):
         self.stage = int(stage)
@@ -967,7 +1051,22 @@ class AudioDirector:
         remaining = max(0, int(remaining_seconds))
         if stage >= 12:
             self.last_countdown_second = None
+            self.last_alarm_marker = None
+            self.last_heartbeat_second = None
             return
+
+        self._set_ambient_level(remaining)
+        # Clear checkpoints rather than a constant alarm during the full hour.
+        if remaining in (300, 180, 60) and remaining != self.last_alarm_marker:
+            self.last_alarm_marker = remaining
+            self.play("urgent_tick" if remaining == 60 else "tick")
+
+        # Soft double pulses add tension during the last minute, then yield to
+        # the precise final-ten-second countdown beeps.
+        if 10 < remaining <= 60 and remaining % 10 == 0 and remaining != self.last_heartbeat_second:
+            self.last_heartbeat_second = remaining
+            self.play("heartbeat")
+
         if 1 <= remaining <= 10 and remaining != self.last_countdown_second:
             self.last_countdown_second = remaining
             self.play("urgent_tick" if remaining <= 3 else "tick")
@@ -999,7 +1098,9 @@ class AudioDirector:
         if not self.available:
             label, color = "AUDIO OUTPUT UNAVAILABLE", (127, 147, 148)
         elif self.enabled:
-            label, color = "SOUND DESIGN ACTIVE  //  F8 MUTE", (77, 190, 139)
+            ambience = "AMBIENCE ON" if self.ambient_requested else "AMBIENCE OFF"
+            label = f"SOUND {int(self.master_volume * 100)}%  //  F7 {ambience}  F8 MUTE  F9/F10 VOLUME"
+            color = (77, 190, 139)
         else:
             label, color = "SOUND MUTED  //  F8 UNMUTE", (255, 107, 111)
         draw_text(surface, label, 9, (width - 28, height - 24), color,
@@ -2042,6 +2143,18 @@ class EscapeRoomApp:
         if event.key == pygame.K_F8:
             enabled = self.audio.toggle()
             self.stage_message = "SOUND DESIGN ACTIVE" if enabled else "SOUND MUTED"
+            return True
+        if event.key == pygame.K_F7:
+            enabled = self.audio.toggle_ambient()
+            self.stage_message = "AMBIENT DRONE ENABLED" if enabled else "AMBIENT DRONE DISABLED"
+            return True
+        if event.key == pygame.K_F9:
+            level = self.audio.adjust_volume(-0.08)
+            self.stage_message = f"SOUND LEVEL // {int(level * 100)}%"
+            return True
+        if event.key == pygame.K_F10:
+            level = self.audio.adjust_volume(0.08)
+            self.stage_message = f"SOUND LEVEL // {int(level * 100)}%"
             return True
         # Use the modifiers captured on this specific event, not a separate keyboard poll.
         mods = getattr(event, "mod", pygame.key.get_mods())
