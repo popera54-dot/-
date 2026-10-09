@@ -1307,6 +1307,8 @@ class Stage5Controller:
     def start(self):
         count = max(1, len(self.app.players))
         self.tasks = create_task_pool(count)
+        for task in self.tasks:
+            task.bind_app(self.app)
         self.current_task_index = 0
         self.assigned_player = 0
         self.phase = "briefing"
@@ -1337,9 +1339,21 @@ class Stage5Controller:
         if self.current_task:
             self.current_task.reset()
 
+    def begin_task_clear(self):
+        """Hold the solved task on screen long enough for the team to feel the win."""
+        if self.phase == "task_clear":
+            return
+        task = self.current_task
+        if task is None or not task.done:
+            return
+        task.feedback_text = "TASK VERIFIED // ACCESS GRANTED"
+        task.feedback_until = time.monotonic() + 0.95
+        task.feedback_success = True
+        self.phase = "task_clear"
+        self.phase_started = time.monotonic()
+        self.app.audio.play("puzzle")
+
     def advance(self):
-        if self.assigned_player + 1 < len(self.app.players):
-            self.app.audio.play("puzzle")
         self.assigned_player += 1
         self.current_task_index += 1
         if self.assigned_player >= len(self.app.players):
@@ -1351,16 +1365,18 @@ class Stage5Controller:
     def update(self, dt):
         if self.phase == "verify":
             self.app.webcam.read()
+        elif self.phase == "task_clear":
+            if time.monotonic() - self.phase_started >= 0.92:
+                self.advance()
         elif self.phase == "task" and self.current_task:
             task = self.current_task
             if isinstance(task, OilCatchTask):
                 task.update_and_collide(dt, WIDTH, HEIGHT)
             else:
                 task.update(dt)
-            # Oil Catch can complete in the frame update rather than from an input event.
-            # Advance immediately so the game never waits for an unrelated extra click.
+            # Update-driven tasks must also enter the success beat without another click.
             if task.done:
-                self.advance()
+                self.begin_task_clear()
 
     def draw(self, surface):
         t = self.app.background.time
@@ -1438,12 +1454,52 @@ class Stage5Controller:
                       align="center")
             return
 
-        if self.phase == "task" and task:
+        if self.phase in ("task", "task_clear") and task:
             draw_text(surface,
                       f"PLAYER {self.assigned_player + 1:02d}  //  {player.name if player else 'UNKNOWN'}",
                       13, (WIDTH / 2, 30), (255, 193, 78),
                       align="center", mono=True, bold=True)
             task.draw(surface, draw_text, rounded_panel, glow_circle, pygame, WIDTH, HEIGHT, t)
+
+            if self.phase == "task" and task.feedback_text and time.monotonic() < task.feedback_until:
+                feedback_rect = pygame.Rect(WIDTH // 2 - 250, 142, 500, 36)
+                accent = (74, 255, 170) if task.feedback_success else (255, 79, 93)
+                rounded_panel(surface, feedback_rect, (2, 10, 13, 235), accent, 8, 2)
+                draw_text(surface, task.feedback_text, 14, feedback_rect.center,
+                          accent, align="center", mono=True, bold=True)
+
+            if self.phase == "task_clear":
+                veil = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+                veil.fill((0, 5, 7, 154))
+                surface.blit(veil, (0, 0))
+                panel = pygame.Rect(WIDTH // 2 - 350, HEIGHT // 2 - 120, 700, 240)
+                rounded_panel(surface, panel, (2, 12, 13, 246), (62, 255, 163), 18, 3)
+                pygame.draw.line(surface, (255, 79, 79),
+                                 (panel.x + 18, panel.y + 17),
+                                 (panel.x + 115, panel.y + 17), 2)
+                draw_text(surface, "SECURITY NODE CAPTURED", 13,
+                          (panel.centerx, panel.y + 35), (80, 225, 147),
+                          align="center", mono=True, bold=True)
+                draw_text(surface, "ACCESS GRANTED", 42,
+                          (panel.centerx, panel.y + 91), (245, 255, 249),
+                          align="center", mono=True, bold=True)
+                task_name = fit_text(task.name.upper(), 18, panel.w - 50, mono=True, bold=True)
+                draw_text(surface, task_name, 18,
+                          (panel.centerx, panel.y + 137), (255, 186, 104),
+                          align="center", mono=True, bold=True)
+                draw_text(surface,
+                          f"PLAYER {self.assigned_player + 1:02d} / {max(1, len(self.app.players)):02d}  //  NEXT LOCK INITIALIZING",
+                          11, (panel.centerx, panel.y + 177), (106, 171, 142),
+                          align="center", mono=True)
+                # Team progress makes a multi-player round feel like a coordinated operation.
+                total = max(1, len(self.app.players))
+                bar_x, bar_y, segment_w, gap = panel.x + 105, panel.bottom - 32, 30, 8
+                total_w = total * segment_w + (total - 1) * gap
+                bar_x = panel.centerx - total_w // 2
+                for index in range(total):
+                    rr = pygame.Rect(bar_x + index * (segment_w + gap), bar_y, segment_w, 5)
+                    color = (64, 237, 145) if index <= self.assigned_player else (27, 56, 45)
+                    pygame.draw.rect(surface, color, rr)
 
     def handle(self, event):
         if self.phase == "verify":
@@ -1458,7 +1514,7 @@ class Stage5Controller:
         if self.phase == "task" and self.current_task:
             result = self.current_task.handle(event, pygame, WIDTH, HEIGHT)
             if result.completed or self.current_task.done:
-                self.advance()
+                self.begin_task_clear()
 
 
 class StageManager:
