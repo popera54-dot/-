@@ -19,9 +19,19 @@ A cinematic, full-screen Hanukkah escape-room game for Windows, built with Pytho
 
 The operator console lets you edit the Stage 3 clue location, Stage 7 clue location, and as many Stage 4 puzzle-piece locations as needed. Settings are stored locally in `data/operator_config.json`.
 
-The 10-minute Trivia Lifeline can appear while the family is in stages 5–7; every correct answer adds 60 seconds. The adaptive time manager can skip intermediate stages when there is no longer enough time to complete the remaining challenges and finale.
+The 10-minute Trivia Lifeline can appear while the family is in stages 5–11; every correct answer adds 60 seconds. The adaptive time manager can skip intermediate stages when there is no longer enough time to complete the remaining challenges and finale.
 
-## Run on Windows
+## Portable Windows build
+
+A Windows build can be produced without installing Python on the target PC:
+
+- The repository's **Build Windows Portable App** workflow packages the game on a Windows runner and publishes a downloadable artifact when it succeeds.
+- Open the repository's **Actions** tab, select the latest **Build Windows Portable App** run, and download the `TheGreeksAreBack-Windows-x64` artifact. Extract the ZIP and keep the folder intact; run `StartGame.bat` or `TheGreeksAreBack.exe`.
+- To build locally on Windows, double-click `build_windows.bat`. The output folder is `dist\\TheGreeksAreBack`.
+
+The portable build stores its operator configuration and player face templates in a `data` folder next to the executable.
+
+## Run from source on Windows
 
 1. Install Python 3.11 or later.
 2. Open PowerShell in the repository folder.
