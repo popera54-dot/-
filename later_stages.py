@@ -407,6 +407,18 @@ class LaterStagesController:
                         self.phase = "code"
             return
 
+        if self.phase == "code" and event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self.replay_button and self.replay_button.collidepoint(event.pos):
+                self.phase = "listen"
+                self.replay_only = True
+                self.audio_group = 0
+                self.audio_beep = 0
+                self.next_beep_at = time.monotonic() + 0.45
+                self.code_input = ""
+                self.error = ""
+                self._make_beep()
+            return
+
         if self.phase == "code" and event.type == pygame.KEYDOWN:
             if event.key == pygame.K_BACKSPACE:
                 self.code_input = self.code_input[:-1]
