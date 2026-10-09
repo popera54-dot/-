@@ -16,6 +16,7 @@ from stage4_puzzle import Stage4Controller
 from stage5_tasks import TaskBase, OilCatchTask, create_task_pool
 from stage6_protocol import Stage6Controller
 from stage7_server_cipher import Stage7Controller
+from later_stages import LaterStagesController
 
 # ============================================================
 # THE GREEKS ARE BACK
@@ -599,8 +600,17 @@ class StageManager:
         self.stage5 = Stage5Controller(app)
         self.stage6 = Stage6Controller(app)
         self.stage7 = Stage7Controller(app)
+        self.later = LaterStagesController(app)
 
     def goto(self, stage):
+        requested_stage = stage
+        if self.app.game_started_at and 5 <= stage <= 11:
+            remaining = self.app.remaining_seconds
+            # Preserve the timed 180-second quantum challenge and at least 90 seconds for the finale.
+            estimated_needed = 270 + max(0, 11 - stage) * 30
+            if remaining < estimated_needed:
+                stage = 11 if remaining >= 270 else 12
+
         self.stage = stage
         self.app.stage_started_at = time.monotonic()
         self.app.stage_message = ""
@@ -612,6 +622,8 @@ class StageManager:
             self.stage6.start()
         elif stage == 7:
             self.stage7.start()
+        elif 8 <= stage <= 12:
+            self.later.start(stage)
 
     def draw_stage_chip(self, surface):
         if self.stage <= 0:
@@ -636,6 +648,8 @@ class StageManager:
             self.stage6.draw(surface, draw_text, rounded_panel, glow_circle, pygame, WIDTH, HEIGHT, self.app.background.time)
         elif self.stage == 7:
             self.stage7.draw(surface, draw_text, rounded_panel, glow_circle, pygame, WIDTH, HEIGHT, self.app.background.time)
+        elif 8 <= self.stage <= 12:
+            self.later.draw(surface, draw_text, rounded_panel, glow_circle, pygame, WIDTH, HEIGHT, self.app.background.time)
         else:
             self.draw_placeholder(surface)
 
@@ -850,6 +864,7 @@ class EscapeRoomApp:
         self.player_name = ""
         self.roster_error = ""
         self.active_player_index = 0
+        self.timer_frozen = None
 
         self.setup_clue_location = "במיקום שהוגדר בלוח המפעיל"
         self.setup_server_location = "במיקום שהוגדר בלוח המפעיל"
@@ -891,6 +906,8 @@ class EscapeRoomApp:
 
     @property
     def remaining_seconds(self):
+        if self.timer_frozen is not None:
+            return int(self.timer_frozen)
         if not self.game_started_at:
             return TOTAL_SECONDS
         return max(0, TOTAL_SECONDS - int(time.monotonic() - self.game_started_at))
@@ -976,7 +993,7 @@ class EscapeRoomApp:
         rounded_panel(surface, add_rect, (7, 29, 31), (55, 221, 180), 8, 1)
         draw_text(surface, "+ חלק", 11, add_rect.center, (91, 255, 211), align="center", bold=True)
     def draw_global_hud(self, surface):
-        if not self.game_started_at:
+        if not self.game_started_at or self.stage_manager.stage in (9, 12):
             return
         remaining = self.remaining_seconds
         danger = 1.0 if remaining < 5 * 60 else 0.0
@@ -1120,6 +1137,8 @@ class EscapeRoomApp:
                         self.cipher_digits.clear()
 
     def handle_game_event(self, event):
+        if self.stage_manager.later.handle_lifeline(event, WIDTH, HEIGHT):
+            return
         if self.stage_manager.stage == 2:
             self.handle_roster_event(event)
         elif self.stage_manager.stage == 3:
@@ -1132,6 +1151,8 @@ class EscapeRoomApp:
             self.stage_manager.stage6.handle(event, pygame, WIDTH, HEIGHT)
         elif self.stage_manager.stage == 7:
             self.stage_manager.stage7.handle(event, pygame, WIDTH, HEIGHT)
+        elif 8 <= self.stage_manager.stage <= 12:
+            self.stage_manager.later.handle(event, WIDTH, HEIGHT)
         else:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 self.running = False
@@ -1159,12 +1180,18 @@ class EscapeRoomApp:
             self.stage_manager.stage6.update(dt)
         elif self.state == "game" and self.stage_manager.stage == 7:
             self.stage_manager.stage7.update(dt)
+        elif self.state == "game" and 8 <= self.stage_manager.stage <= 12:
+            self.stage_manager.later.update(dt)
+
+        if self.state == "game":
+            self.stage_manager.later.lifeline_update()
 
     def draw(self):
         if self.state == "setup":
             self.operator_setup(screen)
         else:
             self.stage_manager.draw(screen)
+            self.stage_manager.later.draw_lifeline(screen, draw_text, rounded_panel, pygame, WIDTH, HEIGHT)
             self.draw_global_hud(screen)
 
             if self.stage_message:
