@@ -652,8 +652,8 @@ class LaterStagesController:
 
     def _draw_memory_scene(self, surface, rect, pygame, draw_text):
         # The scene is drawn once as fixed vector artwork, so retries use the exact same composition.
-        pygame.draw.rect(surface, (9, 26, 42), rect, border_radius=18)
-        pygame.draw.rect(surface, (41, 104, 117), rect, 2, border_radius=18)
+        pygame.draw.rect(surface, (9, 26, 42), rect)
+        pygame.draw.rect(surface, (41, 104, 117), rect, 2)
         sky = pygame.Rect(rect.x + 14, rect.y + 14, rect.w - 28, int(rect.h * .48))
         pygame.draw.rect(surface, (8, 18, 44), sky, border_radius=12)
         for i in range(42):
@@ -746,8 +746,8 @@ class LaterStagesController:
         if self.phase == "memory":
             self._draw_memory_scene(surface, scene, pygame, draw_text)
         else:
-            pygame.draw.rect(surface, (5, 15, 22), scene, border_radius=18)
-            pygame.draw.rect(surface, (34, 79, 87), scene, 2, border_radius=18)
+            pygame.draw.rect(surface, (5, 15, 22), scene)
+            pygame.draw.rect(surface, (34, 79, 87), scene, 2)
             if self.phase == "intro":
                 label = "SNAPSHOT SEALED // PRESS START"
             elif self.phase == "retry_notice":
@@ -847,14 +847,14 @@ class LaterStagesController:
         if frame:
             frame_rect = frame.get_rect(center=(width // 2, int(height * .53)))
             surface.blit(frame, frame_rect)
-            pygame.draw.rect(surface, (65, 255, 190), frame_rect, 3, border_radius=16)
+            pygame.draw.rect(surface, (65, 255, 190), frame_rect, 3)
         else:
             self.app.background.draw(surface)
             draw_text(surface, "CAMERA OFFLINE // KEEP THE CELEBRATION GOING",
                       18, (width / 2, int(height * .52)), (255, 77, 92), align="center", mono=True, bold=True)
 
-        pygame.draw.rect(surface, (3, 19, 18), (20, 20, width - 40, 105), border_radius=16)
-        pygame.draw.rect(surface, (63, 255, 186), (20, 20, width - 40, 105), 2, border_radius=16)
+        pygame.draw.rect(surface, (3, 19, 18), (20, 20, width - 40, 105))
+        pygame.draw.rect(surface, (63, 255, 186), (20, 20, width - 40, 105), 2)
         draw_text(surface, "MACCABEAN ENERGY PROTOCOL", 17,
                   (width / 2, 46), (95, 255, 192), align="center", mono=True, bold=True)
         draw_text(surface, "כל הכבוד! הגעתם לשרת המרכזי הראשי!", 29,
@@ -865,7 +865,7 @@ class LaterStagesController:
         rounded_panel(surface, meter, (4, 17, 16), (68, 255, 188), 14, 2)
         fill_width = int((meter.w - 10) * self.energy / 100.0)
         if fill_width > 0:
-            pygame.draw.rect(surface, (53, 245, 161), (meter.x + 5, meter.y + 5, fill_width, meter.h - 10), border_radius=10)
+            pygame.draw.rect(surface, (53, 245, 161), (meter.x + 5, meter.y + 5, fill_width, meter.h - 10))
         draw_text(surface, f"ENERGY // {int(self.energy):03d}%", 18,
                   (width / 2, meter.y + meter.h + 22), (91, 255, 194), align="center", mono=True, bold=True)
         mic_text = "MIC ACTIVE" if self._mic_stream is not None else "MIC UNAVAILABLE"

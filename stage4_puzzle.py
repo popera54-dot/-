@@ -242,7 +242,7 @@ class Stage4Controller:
         cell_w = inner.w / self.maze_cols
         cell_h = inner.h / self.maze_rows
 
-        pygame.draw.rect(surface, (2, 9, 13), inner, border_radius=16)
+        pygame.draw.rect(surface, (2, 9, 13), inner)
         for y in range(self.maze_rows):
             for x in range(self.maze_cols):
                 r = pygame.Rect(

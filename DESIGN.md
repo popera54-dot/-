@@ -52,6 +52,13 @@ The visual system combines:
    - warm flame-inspired highlights against the dark interface
    - symbols integrated into the technology rather than pasted on top
 
+## Geometry — hard-edged, not office UI
+
+- Use clipped corners, chamfered frames, sharp rails, and rectangular telemetry.
+- Buttons and panels should look like security hardware, not soft cards or word-processor shapes.
+- Round forms are reserved for meaningful objects (oil drops, optical targets, real scene details), not generic containers.
+- Keep the hierarchy cinematic: large angular frames, compact technical labels, and controlled red/green status indicators.
+
 ## Typography
 
 Primary UI:

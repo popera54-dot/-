@@ -57,8 +57,8 @@ def draw_hanukkah_symbol(surface, symbol, center, size, pygame):
         pygame.draw.ellipse(surface, dark, body)
         pygame.draw.ellipse(surface, color, body, line)
         neck = pygame.Rect(x - int(s * .18), y - int(s * .62), int(s * .36), int(s * .34))
-        pygame.draw.rect(surface, dark, neck, border_radius=max(2, s // 8))
-        pygame.draw.rect(surface, color, neck, line, border_radius=max(2, s // 8))
+        pygame.draw.rect(surface, dark, neck)
+        pygame.draw.rect(surface, color, neck, line)
         pygame.draw.arc(surface, color, (x - int(s * .74), y - int(s * .08), int(s * .54), int(s * .48)),
                         math.radians(270), math.radians(90), line)
     elif symbol == "flame":
@@ -146,10 +146,10 @@ class FirewallMazeTask(TaskBase):
             for x, ch in enumerate(row):
                 rr = pygame.Rect(ox + x * cell, oy + y * cell, cell - 3, cell - 3)
                 if ch == "#":
-                    pygame.draw.rect(surface, (15, 47, 48), rr, border_radius=8)
-                    pygame.draw.rect(surface, (52, 194, 157), rr, 1, border_radius=8)
+                    pygame.draw.rect(surface, (15, 47, 48), rr)
+                    pygame.draw.rect(surface, (52, 194, 157), rr, 1)
                 else:
-                    pygame.draw.rect(surface, (5, 15, 20), rr, border_radius=8)
+                    pygame.draw.rect(surface, (5, 15, 20), rr)
                 if ch == "E":
                     glow_circle(surface, rr.center, 18, (255, 193, 61), 16)
                     draw_text(surface, "יציאה", 9, rr.center, (255, 218, 130), align="center", mono=True)
@@ -218,14 +218,14 @@ class OilCatchTask(TaskBase):
         draw_text(surface, f"פכים שנאספו {self.catches}/5", 17, (width / 2, 108),
                   (255, 200, 96), align="center", mono=True, bold=True)
         area = pygame.Rect(width * .12, height * .16, width * .76, height * .68)
-        pygame.draw.rect(surface, (4, 13, 18), area, border_radius=24)
-        pygame.draw.rect(surface, (34, 82, 83), area, 1, border_radius=24)
+        pygame.draw.rect(surface, (4, 13, 18), area)
+        pygame.draw.rect(surface, (34, 82, 83), area, 1)
         for item in self.items:
             x = int(width * item[0])
             y = int(height * (.18 + item[1] * .65))
             glow_circle(surface, (x, y), 20, (255, 194, 63), 11)
             pygame.draw.circle(surface, (178, 130, 52), (x, y), 14)
-            pygame.draw.rect(surface, (230, 180, 76), (x - 9, y - 4, 18, 8), 2, border_radius=3)
+            pygame.draw.rect(surface, (230, 180, 76), (x - 9, y - 4, 18, 8), 2)
         bx = int(width * self.basket_x)
         by = int(height * .82)
         pygame.draw.arc(surface, (90, 255, 214), (bx - 48, by - 34, 96, 62),
@@ -427,7 +427,7 @@ class ColorCodeTask(TaskBase):
                   (width / 2, 110), (190, 204, 206), align="center")
         for i, (label, col) in enumerate(self.colors):
             rr = pygame.Rect(width / 2 - 250 + i * 175, height * .62, 145, 90)
-            pygame.draw.rect(surface, (8, 19, 23), rr, border_radius=18)
+            pygame.draw.rect(surface, (8, 19, 23), rr)
             pygame.draw.circle(surface, col, rr.center, 28)
             draw_text(surface, label, 13, (rr.centerx, rr.bottom - 16),
                       (229, 238, 240), align="center", mono=True, bold=True)
