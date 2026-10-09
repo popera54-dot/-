@@ -17,6 +17,11 @@ def check_stage_4():
         pass
 
     puzzle = Stage4Controller(DummyApp())
+    puzzle.app.setup_puzzle_locations = ["", "מאחורי הווילון", "", "במגירת המטבח"]
+    assert puzzle._configured_locations() == [
+        (2, "מאחורי הווילון"),
+        (4, "במגירת המטבח"),
+    ]
     assert puzzle.path[0] == puzzle.start_cell
     assert puzzle.path[-1] == puzzle.finish_cell
     assert all(puzzle.maze[y][x] == 0 for x, y in puzzle.path)
