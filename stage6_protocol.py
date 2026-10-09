@@ -16,6 +16,9 @@ class Stage6Controller:
         self.phase = "dark"
         self.verify_index = 0
         self.verify_score = 0.0
+        # Reuse one full-frame alpha layer; allocating a 1600x900 surface at 60 FPS
+        # caused avoidable memory churn in the flashlight stage.
+        self._flashlight_surface = None
 
     @property
     def current_player(self):
@@ -86,15 +89,24 @@ class Stage6Controller:
                             self.app.cipher_digits.clear()
 
     @staticmethod
-    def make_flashlight_overlay(width, height, center, pygame, radius=108):
-        """Create a black overlay with a soft, transparent spotlight at center."""
+    def make_flashlight_overlay(width, height, center, pygame, radius=108, target_surface=None):
+        """Fill a reusable black alpha layer with a soft spotlight cutout."""
         radius = max(1, int(radius))
-        overlay = pygame.Surface((width, height), pygame.SRCALPHA)
+        size = (int(width), int(height))
+        overlay = target_surface
+        if overlay is None or overlay.get_size() != size:
+            overlay = pygame.Surface(size, pygame.SRCALPHA)
+        overlay.set_clip(None)
         overlay.fill((0, 0, 0, 249))
         cx, cy = map(int, center)
+        # The gradient is small compared with the full-screen layer; clip prevents
+        # any accidental pixels outside the spotlight from being rewritten by the circles.
+        spotlight_rect = pygame.Rect(cx - radius, cy - radius, radius * 2 + 1, radius * 2 + 1)
+        overlay.set_clip(spotlight_rect.clip(overlay.get_rect()))
         for r in range(radius, 0, -3):
             alpha = int(249 * (r / radius) ** 1.65)
             pygame.draw.circle(overlay, (0, 0, 0, alpha), (cx, cy), r)
+        overlay.set_clip(None)
         return overlay
 
     def draw(self, surface, draw_text, rounded_panel, glow_circle, pygame, width, height, t):
@@ -179,5 +191,9 @@ class Stage6Controller:
         # and the hidden control have been drawn. The cursor-sized light then
         # reveals only the pixels beneath it instead of leaving text always visible.
         light_radius = 108 + int((math.sin(t * 3.1) + 1) * 9)
-        dark = self.make_flashlight_overlay(width, height, (mx, my), pygame, light_radius)
+        dark = self.make_flashlight_overlay(
+            width, height, (mx, my), pygame, light_radius,
+            target_surface=self._flashlight_surface
+        )
+        self._flashlight_surface = dark
         surface.blit(dark, (0, 0))
