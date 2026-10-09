@@ -52,6 +52,7 @@ class LaterStagesController:
         self.dance_started = 0.0
         self.victory_started = None
         self.countdown_started = None
+        self.debrief_started = None
         self.lifeline_active = False
         self.lifeline_used = False
         self.lifeline_index = 0
@@ -154,6 +155,7 @@ class LaterStagesController:
             self.dance_started = time.monotonic()
             self.victory_started = None
             self.countdown_started = None
+            self.debrief_started = None
             self._previous_gray = None
             self.mic_level = 0.0
             self.app.timer_frozen = self.app.remaining_seconds
@@ -355,6 +357,12 @@ class LaterStagesController:
             self.number_velocities[number] = [vx, vy]
 
     def _update_energy(self, dt, now):
+        if self.phase == "debrief":
+            if self.debrief_started is not None and now - self.debrief_started >= 12.0:
+                self._stop_mic()
+                self.app.running = False
+            return
+
         # Motion tracking needs frames but not face boxes; skipping the cascade is cheaper
         # and reduces latency during the finale, where the camera is sampled every update.
         frame = self.app.webcam.read(detect_face=False)
@@ -388,8 +396,16 @@ class LaterStagesController:
 
         if self.phase == "countdown" and self.countdown_started is not None:
             if now - self.countdown_started >= 4.8:
-                self._stop_mic()
-                self.app.running = False
+                # Finish camera capture, but preserve the victory music through the debrief.
+                if self._mic_stream is not None:
+                    try:
+                        self._mic_stream.stop()
+                        self._mic_stream.close()
+                    except Exception:
+                        pass
+                self._mic_stream = None
+                self.phase = "debrief"
+                self.debrief_started = now
 
     def handle(self, event, width, height):
         if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
@@ -405,7 +421,12 @@ class LaterStagesController:
         elif self.stage == 11:
             self._handle_stage11(event, width, height)
         elif self.stage == 12:
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE and self.phase == "dance":
+            if event.type == pygame.KEYDOWN and self.phase == "debrief" and event.key in (
+                pygame.K_RETURN, pygame.K_SPACE
+            ):
+                self._stop_mic()
+                self.app.running = False
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE and self.phase == "dance":
                 # Backup for a blocked camera/mic; movement and singing remain the intended interaction.
                 self.energy = min(99.0, self.energy + 0.2)
 
@@ -866,7 +887,107 @@ class LaterStagesController:
             draw_text(surface, "TIMEOUT // AUTO-ADVANCING", 16,
                       (width / 2, 755), (255, 64, 80), align="center", mono=True, bold=True)
 
+    def _team_debrief_stats(self):
+        time_left = (
+            int(self.app.timer_frozen) if self.app.timer_frozen is not None
+            else int(self.app.remaining_seconds)
+        )
+        errors = int(getattr(self.app, "mistakes", 0))
+        if time_left >= 45 * 60 and errors <= 3:
+            rank, rank_title, rank_color = "GHOST PROTOCOL", "LEGENDARY", (255, 211, 113)
+        elif time_left >= 30 * 60 and errors <= 8:
+            rank, rank_title, rank_color = "ELITE OPERATORS", "ELITE", (91, 255, 186)
+        elif time_left >= 15 * 60:
+            rank, rank_title, rank_color = "FIELD OPERATORS", "FIELD READY", (102, 203, 255)
+        else:
+            rank, rank_title, rank_color = "LAST-STAND SURVIVORS", "SURVIVORS", (255, 142, 117)
+        return {
+            "time_left": time_left,
+            "errors": errors,
+            "xp": int(getattr(self.app, "mission_xp", 0)),
+            "clears": int(getattr(self.app, "stages_cleared", 0)),
+            "rank": rank,
+            "rank_title": rank_title,
+            "rank_color": rank_color,
+        }
+
+    def _draw_debrief(self, surface, draw_text, rounded_panel, glow_circle, pygame, width, height):
+        stats = self._team_debrief_stats()
+        surface.fill((2, 8, 10))
+        glow_circle(surface, (width // 2, 230), 190, stats["rank_color"], 26)
+        for i in range(11):
+            y = 74 + i * 68
+            brightness = 20 + (i * 7) % 32
+            pygame.draw.line(surface, (8, brightness + 20, 32), (28, y), (width - 28, y), 1)
+        pygame.draw.line(surface, (45, 115, 82), (64, 56), (width - 64, 56), 2)
+        pygame.draw.line(surface, (255, 78, 76), (64, height - 58), (width - 64, height - 58), 2)
+
+        # Angular medal/shield built from vector shapes, without external images or font icons.
+        cx, cy = width // 2, 245
+        medal = [(cx, cy - 88), (cx + 72, cy - 48), (cx + 58, cy + 38),
+                 (cx, cy + 86), (cx - 58, cy + 38), (cx - 72, cy - 48)]
+        pygame.draw.polygon(surface, (5, 23, 20), medal)
+        pygame.draw.polygon(surface, stats["rank_color"], medal, 3)
+        inner = [(cx, cy - 52), (cx + 42, cy - 25), (cx + 33, cy + 22),
+                 (cx, cy + 48), (cx - 33, cy + 22), (cx - 42, cy - 25)]
+        pygame.draw.polygon(surface, (12, 37, 30), inner)
+        pygame.draw.polygon(surface, (255, 240, 189), inner, 1)
+        star = []
+        for index in range(10):
+            angle = -math.pi / 2 + index * math.pi / 5
+            radius = 30 if index % 2 == 0 else 13
+            star.append((cx + int(math.cos(angle) * radius),
+                         cy + int(math.sin(angle) * radius)))
+        pygame.draw.polygon(surface, stats["rank_color"], star)
+
+        draw_text(surface, "MISSION DEBRIEF // SERVER RECLAIMED", 14,
+                  (cx, 76), (93, 255, 190), align="center", mono=True, bold=True)
+        draw_text(surface, "המשימה הושלמה", 42,
+                  (cx, 132), (239, 249, 244), align="center", bold=True)
+        draw_text(surface, "ANTIOCHUS 2.0 // CONNECTION TERMINATED", 13,
+                  (cx, 350), (255, 142, 106), align="center", mono=True, bold=True)
+        draw_text(surface, stats["rank_title"], 17,
+                  (cx, 391), stats["rank_color"], align="center", mono=True, bold=True)
+        draw_text(surface, stats["rank"], 30,
+                  (cx, 426), (244, 253, 247), align="center", mono=True, bold=True)
+
+        cards = [
+            ("TEAM XP", f'{stats["xp"]:05d}', (90, 255, 188)),
+            ("PROTOCOLS", f'{stats["clears"]:02d}/09', (255, 203, 110)),
+            ("ERRORS", f'{stats["errors"]:02d}', (255, 123, 116)),
+        ]
+        card_w, card_h, gap = 270, 100, 28
+        start_x = cx - (3 * card_w + 2 * gap) // 2
+        for index, (label, value, color) in enumerate(cards):
+            rect = pygame.Rect(start_x + index * (card_w + gap), 502, card_w, card_h)
+            rounded_panel(surface, rect, (4, 18, 19), color, 12, 2)
+            draw_text(surface, label, 12, (rect.centerx, rect.y + 22),
+                      (130, 170, 157), align="center", mono=True, bold=True)
+            draw_text(surface, value, 32, (rect.centerx, rect.y + 65),
+                      color, align="center", mono=True, bold=True)
+
+        elapsed = max(0.0, time.monotonic() - self.debrief_started) if self.debrief_started else 0.0
+        remaining = max(0, 12 - int(elapsed))
+        draw_text(surface, "TIME LEFT AT CORE CAPTURE", 10,
+                  (cx, 644), (112, 160, 145), align="center", mono=True)
+        time_str = (
+            f'{stats["time_left"] // 3600:02d}:'
+            f'{(stats["time_left"] % 3600) // 60:02d}:'
+            f'{stats["time_left"] % 60:02d}'
+        )
+        draw_text(surface, time_str, 22, (cx, 675), (230, 247, 237),
+                  align="center", mono=True, bold=True)
+        pygame.draw.rect(surface, (15, 48, 38), (cx - 330, 720, 660, 6))
+        fill_w = int(660 * remaining / 12.0)
+        if fill_w > 0:
+            pygame.draw.rect(surface, stats["rank_color"], (cx - 330, 720, fill_w, 6))
+        draw_text(surface, "ENTER / SPACE // CLOSE MISSION   •   AUTO-CLOSE IN 12 SECONDS",
+                  12, (cx, height - 82), (100, 154, 138), align="center", mono=True)
+
     def _draw_stage12(self, surface, draw_text, rounded_panel, glow_circle, pygame, width, height, t):
+        if self.phase == "debrief":
+            self._draw_debrief(surface, draw_text, rounded_panel, glow_circle, pygame, width, height)
+            return
         frame = self.app.webcam.pygame_frame((width - 30, int(height * .66)))
         if frame:
             frame_rect = frame.get_rect(center=(width // 2, int(height * .53)))
@@ -893,23 +1014,11 @@ class LaterStagesController:
         draw_text(surface, f"ENERGY // {int(self.energy):03d}%", 18,
                   (width / 2, meter.y + meter.h + 22), (91, 255, 194), align="center", mono=True, bold=True)
 
-        mission_time = (
-            int(self.app.timer_frozen) if self.app.timer_frozen is not None
-            else int(self.app.remaining_seconds)
-        )
-        errors = int(getattr(self.app, "mistakes", 0))
-        if mission_time >= 45 * 60 and errors <= 3:
-            team_rank = "GHOST PROTOCOL"
-        elif mission_time >= 30 * 60 and errors <= 8:
-            team_rank = "ELITE OPERATORS"
-        elif mission_time >= 15 * 60:
-            team_rank = "FIELD OPERATORS"
-        else:
-            team_rank = "LAST-STAND SURVIVORS"
+        stats = self._team_debrief_stats()
         score_line = (
-            f"MISSION XP // {int(getattr(self.app, 'mission_xp', 0)):05d}"
-            f"    CLEARS // {int(getattr(self.app, 'stages_cleared', 0)):02d}/09"
-            f"    ERRORS // {errors:02d}    TEAM RANK // {team_rank}"
+            f'MISSION XP // {stats["xp"]:05d}'
+            f'    CLEARS // {stats["clears"]:02d}/09'
+            f'    ERRORS // {stats["errors"]:02d}    TEAM RANK // {stats["rank"]}'
         )
         draw_text(surface, score_line, 13, (width / 2, height - 49),
                   (255, 210, 125), align="center", mono=True, bold=True)
