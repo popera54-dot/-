@@ -84,6 +84,15 @@ def run():
         require(app.audio.last_heartbeat_second == 50,
                 "late-game heartbeat cue did not trigger")
 
+        original_audio_stage = app.audio.stage
+        app.audio.set_stage(8)
+        require(app.audio._ambient_target_level(3600) < 0.1,
+                "ambient drone was not ducked for the frequency listening puzzle")
+        app.audio.set_stage(9)
+        require(app.audio._ambient_target_level(3600) >= 0.25,
+                "suspense ambience did not return after the listening puzzle")
+        app.audio.set_stage(original_audio_stage)
+
         # Face-lock brackets must align to a detected camera target and stay safe without one.
         class CameraProbe:
             available = True
