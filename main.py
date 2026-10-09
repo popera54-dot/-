@@ -2128,6 +2128,10 @@ class EscapeRoomApp:
                 if self.cipher_digits:
                     self.cipher_digits.pop()
             elif event.unicode.isdigit() and len(self.cipher_digits) < 4:
+                if not self.cipher_digits:
+                    # Clear the previous denial when a fresh code attempt begins;
+                    # this lets every repeated wrong submission receive its own feedback.
+                    self.stage_message = ""
                 self.cipher_digits.append(event.unicode)
                 if len(self.cipher_digits) == 4:
                     code = "".join(self.cipher_digits)
