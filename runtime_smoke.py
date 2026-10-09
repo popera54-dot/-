@@ -459,7 +459,21 @@ def run():
         require(app.stage_manager.transition_started_at is None,
                 "stage transition animation did not clear after its lifetime")
 
-        print("HEADLESS RUNTIME SMOKE TEST PASSED")
+        # Verified stage clears award XP and a rapid clear receives a speed bonus.
+        app.stage_manager.goto(3)
+        app.stage_message = "FIREWALL 01 COLLAPSED"
+        app.stage_started_at = time.monotonic() - 30.0
+        xp_before = app.mission_xp
+        clears_before = app.stages_cleared
+        app.stage_manager.goto(4)
+        require(app.mission_xp - xp_before == 200,
+                "30-second clear did not award the expected 200 XP")
+        require(app.stages_cleared == clears_before + 1,
+                "successful clear was not counted")
+        require(app.last_cleared_stage == 3 and app.last_score_gain == 200,
+                "clear feedback did not store stage and score")
+
+                print("HEADLESS RUNTIME SMOKE TEST PASSED")
     finally:
         app.stage_manager.later._stop_mic()
         app.webcam.release()
