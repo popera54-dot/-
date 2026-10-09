@@ -180,6 +180,22 @@ def run():
         later.lifeline_update()
         require(later.lifeline_active, "stage 8 did not trigger the last-ten-minute lifeline")
 
+        # Oil Catch completes during update; Stage 5 must advance without another input event.
+        app.players = [object()]
+        stage5 = app.stage_manager.stage5
+        stage5.phase = "task"
+        stage5.assigned_player = 0
+        stage5.current_task_index = 0
+        oil = OilCatchTask()
+        oil.basket_x = 0.5
+        oil.catches = 4
+        catch_y = (0.82 - 0.18) / 0.65
+        oil.items = [[0.5, catch_y, 0.0]]
+        stage5.tasks = [oil]
+        stage5.update(0.0)
+        require(app.stage_manager.stage == 6, "Stage 5 waited for another input after Oil Catch completed")
+        app.players = []
+
         print("HEADLESS RUNTIME SMOKE TEST PASSED")
     finally:
         app.stage_manager.later._stop_mic()
