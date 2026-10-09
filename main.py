@@ -1501,12 +1501,31 @@ class StageManager:
         draw_text(surface, f"SECURITY LAYER // {stage:02d}", 13,
                   (panel.centerx, panel.y + 31), (80, 229, 151),
                   align="center", mono=True, bold=True)
-        draw_text(surface, f"PROTOCOL {stage:02d} UNLOCKED", 34,
-                  (panel.centerx, panel.y + 83), (245, 255, 249),
+        unlock_titles = {
+            1: "INTRUSION CONTAINED // TEAM LINKED",
+            2: "TEAM ROSTER SEALED",
+            3: "OIL CIPHER CRACKED",
+            4: "PHYSICAL PUZZLE VERIFIED",
+            5: "SECURITY CHAIN CLEARED",
+            6: "DARK PROTOCOL CRACKED",
+            7: "SERVER CORE SECURED",
+            8: "FREQUENCY DECODED",
+            9: "INVERSION OVERRIDE ACCEPTED",
+            10: "MEMORY MATRIX VERIFIED",
+            11: "QUANTUM CURRENT STABLE",
+        }
+        title = unlock_titles.get(
+            self.transition_from, f"PROTOCOL {self.transition_from:02d} CLEARED"
+        )
+        draw_text(surface, fit_text(title, 30, panel.w - 54, mono=True, bold=True), 30,
+                  (panel.centerx, panel.y + 76), (245, 255, 249),
+                  align="center", mono=True, bold=True)
+        draw_text(surface, f"NEXT // PROTOCOL {stage:02d} UNLOCKED", 12,
+                  (panel.centerx, panel.y + 112), (255, 174, 105),
                   align="center", mono=True, bold=True)
         stage_label = self.app.stage_names.get(stage, "UNKNOWN SIGNAL")
-        draw_text(surface, fit_text(stage_label.upper(), 17, panel.w - 62, mono=True, bold=True),
-                  17, (panel.centerx, panel.y + 127), (255, 174, 105),
+        draw_text(surface, fit_text(stage_label.upper(), 15, panel.w - 62, mono=True, bold=True),
+                  15, (panel.centerx, panel.y + 139), (255, 174, 105),
                   align="center", mono=True, bold=True)
 
         # Compact 12-stage progression strip; completed nodes stay lit behind the active node.
