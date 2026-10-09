@@ -161,6 +161,64 @@ def draw_text(surface, text, size, pos, color=(235, 245, 255),
     return rect
 
 
+def draw_face_lock(surface, webcam, display_rect):
+    """Draw camera-aligned face-lock brackets without obscuring the live preview."""
+    rect = pygame.Rect(display_rect)
+    frame = getattr(webcam, "frame", None)
+    face = getattr(webcam, "face_box", None)
+    if frame is None:
+        label = "CAMERA SIGNAL LOST" if not getattr(webcam, "available", False) else "WAITING FOR CAMERA FEED"
+        color = (255, 84, 93)
+    elif face is None:
+        label = "ALIGN FACE TO RETICLE"
+        color = (255, 192, 82)
+    else:
+        label = "FACE LOCK // TARGET ACQUIRED"
+        color = (71, 255, 171)
+
+    draw_text(surface, label, 11, (rect.x + 18, rect.y + 16),
+              color, mono=True, bold=True)
+    if frame is None or face is None:
+        # Keep a minimal corner reticle active while the camera acquires a face.
+        cx, cy = rect.right - 35, rect.y + 25
+        pulse = 5 + int((math.sin(time.monotonic() * 7) + 1) * 2)
+        pygame.draw.circle(surface, color, (cx, cy), pulse, 1)
+        pygame.draw.line(surface, color, (cx - 12, cy), (cx - 7, cy), 1)
+        pygame.draw.line(surface, color, (cx + 7, cy), (cx + 12, cy), 1)
+        return False
+
+    try:
+        source_h, source_w = frame.shape[:2]
+        x, y, w, h = [int(value) for value in face]
+        area = rect.inflate(-12, -12)
+        sx, sy = area.w / max(1, source_w), area.h / max(1, source_h)
+        target = pygame.Rect(
+            area.x + int(x * sx), area.y + int(y * sy),
+            max(1, int(w * sx)), max(1, int(h * sy))
+        ).inflate(12, 12).clip(area)
+        if target.w < 16 or target.h < 16:
+            return False
+
+        corner = max(8, min(22, min(target.w, target.h) // 4))
+        edges = [
+            ((target.left, target.top), (target.left + corner, target.top)),
+            ((target.left, target.top), (target.left, target.top + corner)),
+            ((target.right, target.top), (target.right - corner, target.top)),
+            ((target.right, target.top), (target.right, target.top + corner)),
+            ((target.left, target.bottom), (target.left + corner, target.bottom)),
+            ((target.left, target.bottom), (target.left, target.bottom - corner)),
+            ((target.right, target.bottom), (target.right - corner, target.bottom)),
+            ((target.right, target.bottom), (target.right, target.bottom - corner)),
+        ]
+        for start, end in edges:
+            pygame.draw.line(surface, color, start, end, 3)
+        pygame.draw.circle(surface, color, (target.right - 5, target.top + 5), 3)
+        return True
+    except (AttributeError, TypeError, ValueError, ZeroDivisionError):
+        # A malformed camera frame should not interrupt the escape room.
+        return False
+
+
 def rounded_panel(surface, rect, fill, border=(70, 255, 210), radius=24, width=1):
     """Draw a tactical frame with clipped corners instead of a soft rounded card."""
     r = pygame.Rect(rect)
@@ -235,7 +293,7 @@ def _scan_beam_layer(width: int, height: int = 90):
 
 
 
-def draw_intrusion_monitor(surface, rect, t=0.0, *, silhouette=True, compact=False):
+def draw_intrusion_monitor(surface, rect, t=0.0, *, silhouette=True, compact=False, timer_text=None):
     """Cinematic breached-system display inspired by an ominous green control-room screen.
 
     The intruder is only a featureless shadow under a hood: no cartoon face,
@@ -363,6 +421,20 @@ def draw_intrusion_monitor(surface, rect, t=0.0, *, silhouette=True, compact=Fal
         pygame.draw.line(surface, (19, 72, 50),
                          (cx + int(sw * 0.14), sy + int(sh * 0.72)),
                          (cx + int(sw * 0.19), base - 6), 1)
+
+        if timer_text:
+            timer_box = pygame.Rect(sx + 16, sy + 17, 174, 70)
+            pygame.draw.rect(surface, (2, 18, 11), timer_box)
+            pygame.draw.rect(surface, (65, 255, 147), timer_box, 2)
+            pygame.draw.line(surface, (65, 255, 147),
+                             (timer_box.x + 7, timer_box.y + 5),
+                             (timer_box.x + 48, timer_box.y + 5), 2)
+            draw_text(surface, "TIME REMAINING", 9,
+                      (timer_box.centerx, timer_box.y + 9), (119, 211, 144),
+                      align="midtop", mono=True, bold=True)
+            draw_text(surface, str(timer_text), 23,
+                      (timer_box.centerx, timer_box.y + 43), (164, 255, 184),
+                      align="center", mono=True, bold=True)
 
         title_size = max(16, min(31, sw // 38))
         sub_size = max(12, min(23, sw // 50))
@@ -891,6 +963,8 @@ class Stage5Controller:
                 draw_text(surface, "CAMERA SIGNAL LOST", 25, cam_rect.center,
                           (255, 61, 80), align="center", mono=True, bold=True)
 
+            draw_face_lock(surface, self.app.webcam, cam_rect)
+
             cx, cy = cam_rect.center
             sweep = int((math.sin(t * 2.2) + 1) * cam_rect.w * .28)
             pygame.draw.line(surface, (58, 255, 208),
@@ -1077,7 +1151,8 @@ class StageManager:
 
         # One dominant cinematic display replaces the old scattered popups and cartoon avatar.
         display_rect = pygame.Rect(218, 72, WIDTH - 436, HEIGHT - 224)
-        draw_intrusion_monitor(surface, display_rect, elapsed, silhouette=True)
+        draw_intrusion_monitor(surface, display_rect, elapsed, silhouette=True,
+                               timer_text=self.app.timer_string())
 
         # The system speaks from the terminal rather than through a mascot.
         if elapsed >= 3.2:
@@ -1113,6 +1188,8 @@ class StageManager:
         else:
             draw_text(surface, "WEBCAM OFFLINE", 28, cam_rect.center, (255, 70, 90),
                       align="center", mono=True, bold=True)
+
+        draw_face_lock(surface, self.app.webcam, cam_rect)
 
         # reticle
         cx, cy = cam_rect.center
