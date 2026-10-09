@@ -54,7 +54,7 @@ def check_stage_4():
             exit_numbers = [number for _, number in puzzle.exits]
             assert exit_numbers.count(15) == 1
             assert len(exit_numbers) == len(set(exit_numbers))
-            assert len(exit_numbers) >= 8, f"seed {seed}: maze should present multiple exits"
+            assert len(exit_numbers) == 10, f"seed {seed}: expected exactly ten distinct exits, got {len(exit_numbers)}"
             assert not set(puzzle.TARGETS).intersection(set(puzzle.decoy_items.values()))
 
             parent = {puzzle.start_cell: None}
