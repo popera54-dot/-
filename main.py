@@ -747,7 +747,8 @@ class AudioDirector:
     """Original procedural sci-fi audio: no external files, with safe silent fallback."""
 
     EFFECTS = {
-        "click": (0.060, 0.13), "confirm": (0.31, 0.22),
+        # Quiet tactile UI click; success and unlock cues remain the loudest short effects.
+        "click": (0.060, 0.065), "confirm": (0.31, 0.22),
         "puzzle": (0.78, 0.28), "unlock": (1.04, 0.30),
         "transition": (0.34, 0.18), "error": (0.36, 0.20),
         "intrusion": (1.32, 0.28), "tick": (0.095, 0.14),
@@ -990,8 +991,8 @@ class AudioDirector:
             return False
         now = time.monotonic()
         cooldown = (
-            0.24 if name == "error"
-            else 0.065 if name == "click"
+            0.28 if name == "error"
+            else 0.12 if name == "click"
             else 0.10 if name in ("confirm", "tick")
             else 0.0
         )
