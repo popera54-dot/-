@@ -384,6 +384,22 @@ def run():
         require(app.stage_manager.stage == 6, "Stage 5 waited for another input after Oil Catch completed")
         app.players = []
 
+        # Stage changes trigger a short unlock animation and release it after its lifetime.
+        app.stage_manager.goto(7)
+        require(app.stage_manager.transition_started_at is not None,
+                "stage transition animation did not start on a stage change")
+        require(app.stage_manager.transition_to == 7,
+                "stage transition animation recorded the wrong destination")
+        transition_probe = pygame.Surface((main.WIDTH, main.HEIGHT))
+        transition_probe.fill((17, 18, 19))
+        app.stage_manager.draw_transition(transition_probe)
+        require(transition_probe.get_at((main.WIDTH // 2, main.HEIGHT // 2))[:3] != (17, 18, 19),
+                "stage transition did not render its unlock panel")
+        app.stage_manager.transition_started_at = time.monotonic() - 2.0
+        app.stage_manager.draw_transition(transition_probe)
+        require(app.stage_manager.transition_started_at is None,
+                "stage transition animation did not clear after its lifetime")
+
         print("HEADLESS RUNTIME SMOKE TEST PASSED")
     finally:
         app.stage_manager.later._stop_mic()
