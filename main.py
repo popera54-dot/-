@@ -27,7 +27,11 @@ from later_stages import LaterStagesController
 WIDTH, HEIGHT = 1600, 900
 FPS = 60
 TOTAL_SECONDS = 60 * 60
-DATA_DIR = Path("data")
+
+# Keep operator settings and face templates next to the portable app executable
+# in packaged builds, and next to the source file during development.
+APP_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
+DATA_DIR = APP_DIR / "data"
 PLAYER_DIR = DATA_DIR / "players"
 DATA_DIR.mkdir(exist_ok=True)
 PLAYER_DIR.mkdir(exist_ok=True)
