@@ -140,7 +140,7 @@ class FirewallMazeTask(TaskBase):
         oy = height // 2 - (len(self.grid) * cell) // 2 + 30
         draw_text(surface, "FIREWALL MAZE", 18, (width / 2, 80), (80, 255, 210),
                   align="center", mono=True, bold=True)
-        draw_text(surface, "Navigate the menorah through the firewall.", 18,
+        draw_text(surface, "נווטו את החנוכייה דרך חומת האש בלי לגעת בקירות.", 18,
                   (width / 2, 115), (160, 184, 188), align="center")
         for y, row in enumerate(self.grid):
             for x, ch in enumerate(row):
@@ -152,7 +152,7 @@ class FirewallMazeTask(TaskBase):
                     pygame.draw.rect(surface, (5, 15, 20), rr, border_radius=8)
                 if ch == "E":
                     glow_circle(surface, rr.center, 18, (255, 193, 61), 16)
-                    draw_text(surface, "EXIT", 9, rr.center, (255, 218, 130), align="center", mono=True)
+                    draw_text(surface, "יציאה", 9, rr.center, (255, 218, 130), align="center", mono=True)
         px, py = self.player
         cx = ox + px * cell + cell // 2
         cy = oy + py * cell + cell // 2
@@ -207,7 +207,7 @@ class OilCatchTask(TaskBase):
     def draw(self, surface, draw_text, rounded_panel, glow_circle, pygame, width, height, t):
         draw_text(surface, "OIL CATCH", 18, (width / 2, 70), (80, 255, 210),
                   align="center", mono=True, bold=True)
-        draw_text(surface, f"CATCHED {self.catches}/5", 17, (width / 2, 108),
+        draw_text(surface, f"פכים שנאספו {self.catches}/5", 17, (width / 2, 108),
                   (255, 200, 96), align="center", mono=True, bold=True)
         area = pygame.Rect(width * .12, height * .16, width * .76, height * .68)
         pygame.draw.rect(surface, (4, 13, 18), area, border_radius=24)
@@ -261,7 +261,7 @@ class SymbolMatrixTask(TaskBase):
     def draw(self, surface, draw_text, rounded_panel, glow_circle, pygame, width, height, t):
         draw_text(surface, "SYMBOL MATRIX", 18, (width / 2, 70), (80, 255, 210),
                   align="center", mono=True, bold=True)
-        draw_text(surface, "Choose the symbol appearing most often.", 18,
+        draw_text(surface, "בחרו את הסמל שמופיע הכי הרבה פעמים.", 18,
                   (width / 2, 108), (160, 184, 188), align="center")
         cols = 6
         cell = 85
@@ -364,6 +364,8 @@ class CyberMemoryTask(TaskBase):
     def draw(self, surface, draw_text, rounded_panel, glow_circle, pygame, width, height, t):
         draw_text(surface, "CYBER MEMORY", 18, (width / 2, 72), (80, 255, 210),
                   align="center", mono=True, bold=True)
+        draw_text(surface, "מצאו את ארבעת זוגות הסמלים התואמים.", 17,
+                  (width / 2, 108), (165, 190, 193), align="center")
         for i in range(8):
             x, y = i % 4, i // 4
             rr = pygame.Rect(width / 2 - 320 + x * 160, 185 + y * 145, 145, 125)
@@ -382,11 +384,11 @@ class ColorCodeTask(TaskBase):
     def __init__(self, rng=None):
         super().__init__(rng)
         self.colors = [
-            ("RED", (232, 54, 72)),
-            ("BLUE", (60, 137, 255)),
-            ("YELLOW", (255, 197, 62)),
+            ("אדום", (232, 54, 72)),
+            ("כחול", (60, 137, 255)),
+            ("צהוב", (255, 197, 62)),
         ]
-        self.order = [2, 1, 0]  # coldest -> hottest for this fixed challenge
+        self.order = [1, 2, 0]  # כחול -> צהוב -> אדום, מהקר לחם
         self.cursor = 0
 
     def handle(self, event, pygame, width, height):
@@ -405,7 +407,7 @@ class ColorCodeTask(TaskBase):
     def draw(self, surface, draw_text, rounded_panel, glow_circle, pygame, width, height, t):
         draw_text(surface, "COLOR CODE HACK", 18, (width / 2, 72), (80, 255, 210),
                   align="center", mono=True, bold=True)
-        draw_text(surface, "Activate from the coldest color to the hottest.", 18,
+        draw_text(surface, "הפעילו את הצבעים מהקר ביותר אל החם ביותר.", 18,
                   (width / 2, 110), (190, 204, 206), align="center")
         for i, (label, col) in enumerate(self.colors):
             rr = pygame.Rect(width / 2 - 250 + i * 175, height * .62, 145, 90)
@@ -488,7 +490,7 @@ class DreidelSaysTask(TaskBase):
     def draw(self, surface, draw_text, rounded_panel, glow_circle, pygame, width, height, t):
         draw_text(surface, "DREIDEL SAYS", 18, (width / 2, 72), (80, 255, 210),
                   align="center", mono=True, bold=True)
-        draw_text(surface, "Repeat the sequence.", 18, (width / 2, 108),
+        draw_text(surface, "חזרו על הרצף באותו הסדר.", 18, (width / 2, 108),
                   (177, 195, 198), align="center")
         for i in range(4):
             rr = pygame.Rect(width / 2 - 270 + i * 145, 360, 115, 115)
@@ -517,7 +519,7 @@ class WireCutTask(TaskBase):
     def draw(self, surface, draw_text, rounded_panel, glow_circle, pygame, width, height, t):
         draw_text(surface, "WIRE CUT", 18, (width / 2, 72), (80, 255, 210),
                   align="center", mono=True, bold=True)
-        draw_text(surface, "Do not cut red. The correct cable is right of yellow.",
+        draw_text(surface, "אל תחתכו את הכבל האדום. הכבל הנכון נמצא מימין לצהוב.",
                   18, (width / 2, 120), (191, 204, 207), align="center")
         cols = [(238, 62, 74), (62, 139, 255), (253, 198, 58), (62, 221, 152)]
         for i, label in enumerate(self.colors):
@@ -553,7 +555,7 @@ class MissingLetterTask(TaskBase):
     def draw(self, surface, draw_text, rounded_panel, glow_circle, pygame, width, height, t):
         draw_text(surface, "THE MISSING LETTER", 18, (width / 2, 72),
                   (80, 255, 210), align="center", mono=True, bold=True)
-        draw_text(surface, "Watch the spinning dreidel. Type the letter when it appears.",
+        draw_text(surface, "התבוננו בסביבון. הקלידו את האות ברגע שהיא מופיעה.",
                   18, (width / 2, 112), (181, 197, 200), align="center")
         cx, cy = width / 2, height / 2 + 15
         angle = t * 4.8
