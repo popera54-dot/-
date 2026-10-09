@@ -82,19 +82,28 @@ class Stage6Controller:
                             self.app.stage_message = "CODE REJECTED // RECHECK THE PHYSICAL CLUE"
                             self.app.cipher_digits.clear()
 
+    @staticmethod
+    def make_flashlight_overlay(width, height, center, pygame, radius=108):
+        """Create a black overlay with a soft, transparent spotlight at center."""
+        radius = max(1, int(radius))
+        overlay = pygame.Surface((width, height), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 249))
+        cx, cy = map(int, center)
+        for r in range(radius, 0, -3):
+            alpha = int(249 * (r / radius) ** 1.65)
+            pygame.draw.circle(overlay, (0, 0, 0, alpha), (cx, cy), r)
+        return overlay
+
     def draw(self, surface, draw_text, rounded_panel, glow_circle, pygame, width, height, t):
         self.app.background.draw(surface)
         self.app.stage_manager.draw_stage_chip(surface)
 
         mx, my = pygame.mouse.get_pos()
 
-        # Source-defined flashlight overlay.
-        dark = pygame.Surface((width, height), pygame.SRCALPHA)
-        dark.fill((0, 0, 0, 249))
+        # Source-defined flashlight overlay. Alpha rises from transparent at the
+        # cursor to near-black at the edge, leaving a true illuminated centre.
         light_radius = 108 + int((math.sin(t * 3.1) + 1) * 9)
-        for r in range(light_radius, 8, -7):
-            alpha = int(220 * (1 - r / light_radius) ** 1.65)
-            pygame.draw.circle(dark, (0, 0, 0, alpha), (mx, my), r)
+        dark = self.make_flashlight_overlay(width, height, (mx, my), pygame, light_radius)
         surface.blit(dark, (0, 0))
 
         if self.phase == "dark":
