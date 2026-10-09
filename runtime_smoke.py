@@ -40,6 +40,19 @@ def run():
         require(main._glow_layer(12, (50, 220, 180), 13) is main._glow_layer(12, (50, 220, 180), 13),
                 "glow surface was not cached between frames")
 
+        # Face-lock brackets must align to a detected camera target and stay safe without one.
+        class CameraProbe:
+            available = True
+            frame = main.np.zeros((100, 200, 3), dtype=main.np.uint8)
+            face_box = (60, 20, 70, 60)
+
+        face_surface = pygame.Surface((320, 220))
+        require(main.draw_face_lock(face_surface, CameraProbe(), pygame.Rect(0, 0, 320, 220)),
+                "face-lock overlay did not mark a detected target")
+        CameraProbe.face_box = None
+        require(not main.draw_face_lock(face_surface, CameraProbe(), pygame.Rect(0, 0, 320, 220)),
+                "face-lock overlay claimed a target when none was detected")
+
         # Registration must fail safely when OpenCV cannot write a face template,
         # and must register only after a real image has been saved and read back.
         old_player_dir = main.PLAYER_DIR
