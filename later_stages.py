@@ -743,12 +743,18 @@ class LaterStagesController:
                   (width / 2, 115), (240, 248, 250), align="center", bold=True)
 
         scene = pygame.Rect(int(width * .07), 155, int(width * .86), int(height * .65))
-        if self.phase in ("intro", "memory", "retry_notice"):
+        if self.phase == "memory":
             self._draw_memory_scene(surface, scene, pygame, draw_text)
         else:
             pygame.draw.rect(surface, (5, 15, 22), scene, border_radius=18)
             pygame.draw.rect(surface, (34, 79, 87), scene, 2, border_radius=18)
-            draw_text(surface, "MEMORY IMAGE HIDDEN", 18, scene.center,
+            if self.phase == "intro":
+                label = "SNAPSHOT SEALED // PRESS START"
+            elif self.phase == "retry_notice":
+                label = "REPLAY INITIALIZING"
+            else:
+                label = "MEMORY IMAGE HIDDEN"
+            draw_text(surface, label, 18, scene.center,
                       (97, 142, 147), align="center", mono=True, bold=True)
 
         if self.phase == "intro":
