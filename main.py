@@ -1124,7 +1124,9 @@ class EscapeRoomApp:
             add_rect = pygame.Rect(panel.right - 92, panel.y + 12, 74, 29)
             if add_rect.collidepoint(event.pos):
                 self.setup_active_text_field = None
-                self.setup_puzzle_locations.append("")
+                # The editor starts with one empty row; focus it instead of creating a blank-number gap.
+                if not self.setup_puzzle_locations or self.setup_puzzle_locations[-1].strip():
+                    self.setup_puzzle_locations.append("")
                 self.setup_active_piece = len(self.setup_puzzle_locations) - 1
                 self.setup_piece_scroll = max(0, len(self.setup_puzzle_locations) - 3)
                 return
