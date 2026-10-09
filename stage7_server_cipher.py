@@ -36,6 +36,7 @@ class Stage7Controller:
         self.verify_score = 0.0
 
     def begin_verification(self):
+        self.app.stage_message = ""
         if not self.app.players:
             self.phase = "select"
             return
