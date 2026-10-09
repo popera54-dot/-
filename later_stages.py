@@ -345,7 +345,9 @@ class LaterStagesController:
         motion_boost = min(1.35, motion * 42.0)
         mic_boost = min(0.75, max(0.0, (self.mic_level - 0.012) * 28.0))
         # Slowly rising baseline prevents a broken camera/microphone from trapping the family forever.
-        increment = (0.12 if frame is not None else 0.58) + motion_boost + mic_boost
+        # A steady 0.84%/second baseline guarantees completion within about two minutes
+        # even when a camera or microphone is unavailable; live movement/voice speeds it up.
+        increment = 0.84 + motion_boost + mic_boost
         if self.energy < 100:
             self.energy = min(100.0, self.energy + increment * dt)
 
@@ -849,7 +851,7 @@ class LaterStagesController:
     def lifeline_update(self):
         if self.lifeline_used or self.lifeline_active:
             return
-        if self.app.remaining_seconds <= 600 and self.app.stage_manager.stage in (5, 6, 7):
+        if self.app.remaining_seconds <= 600 and 5 <= self.app.stage_manager.stage <= 11:
             self.lifeline_active = True
             self.lifeline_index = 0
             self.lifeline_correct = 0
