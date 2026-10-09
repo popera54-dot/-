@@ -494,9 +494,22 @@ class DreidelSaysTask(TaskBase):
                   (177, 195, 198), align="center")
         for i in range(4):
             rr = pygame.Rect(width / 2 - 270 + i * 145, 360, 115, 115)
-            accent = (255, 200, 78) if i == self.flash_index else (42, 88, 92)
-            rounded_panel(surface, rr, (7, 19, 23), accent, 18, 3 if i == self.flash_index else 1)
-            draw_text(surface, str(i + 1), 32, rr.center, (228, 240, 242), align="center", mono=True, bold=True)
+            active = i == self.flash_index
+            accent = (255, 200, 78) if active else (42, 88, 92)
+            rounded_panel(surface, rr, (7, 19, 23), accent, 18, 3 if active else 1)
+            cx = rr.centerx
+            base_y = rr.bottom - 26
+            candle_color = (255, 221, 132) if active else (77, 218, 185)
+            pygame.draw.line(surface, candle_color, (cx, base_y), (cx, rr.y + 48), 4)
+            pygame.draw.line(surface, candle_color, (cx - 16, base_y), (cx + 16, base_y), 4)
+            flame = (cx, rr.y + 36)
+            flame_color = (255, 202, 86) if active else (57, 149, 135)
+            pygame.draw.polygon(surface, flame_color,
+                                [(flame[0], flame[1] - 10),
+                                 (flame[0] - 7, flame[1] + 2),
+                                 (flame[0] + 7, flame[1] + 2)])
+            draw_text(surface, str(i + 1), 14, (rr.centerx, rr.bottom - 10),
+                      (228, 240, 242), align="midbottom", mono=True, bold=True)
 
 
 class WireCutTask(TaskBase):
@@ -504,7 +517,7 @@ class WireCutTask(TaskBase):
 
     def __init__(self, rng=None):
         super().__init__(rng)
-        self.colors = ["RED", "BLUE", "YELLOW", "GREEN"]
+        self.colors = ["אדום", "כחול", "צהוב", "ירוק"]
         self.correct = 3
 
     def handle(self, event, pygame, width, height):
@@ -548,7 +561,9 @@ class MissingLetterTask(TaskBase):
             self.flash_until = time.monotonic() + .16
 
     def handle(self, event, pygame, width, height):
-        if event.type == pygame.KEYDOWN and event.unicode == self.current:
+        if (event.type == pygame.KEYDOWN
+                and time.monotonic() < self.flash_until
+                and event.unicode == self.current):
             self.done = True
         return self.result()
 
