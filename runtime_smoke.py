@@ -7,7 +7,7 @@ os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
 import pygame
 import main
-from stage5_tasks import CyberMemoryTask, DreidelSaysTask, MissingLetterTask, SymbolMatrixTask, TriviaTask
+from stage5_tasks import CyberMemoryTask, DreidelSaysTask, MissingLetterTask, OilCatchTask, SymbolMatrixTask, TriviaTask
 
 
 def require(condition, message):
