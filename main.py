@@ -1458,8 +1458,9 @@ class Stage5Controller:
             return
 
         if self.phase in ("task", "task_clear") and task:
+            player_name = getattr(player, "name", "UNKNOWN") if player else "UNKNOWN"
             draw_text(surface,
-                      f"PLAYER {self.assigned_player + 1:02d}  //  {player.name if player else 'UNKNOWN'}",
+                      f"PLAYER {self.assigned_player + 1:02d}  //  {player_name}",
                       13, (WIDTH / 2, 30), (255, 193, 78),
                       align="center", mono=True, bold=True)
             task.draw(surface, draw_text, rounded_panel, glow_circle, pygame, WIDTH, HEIGHT, t)
