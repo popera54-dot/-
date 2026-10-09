@@ -1029,6 +1029,10 @@ class AudioDirector:
         return self.master_volume
 
     def toggle_ambient(self):
+        # Keep the finale's celebratory arrangement clean; the suspense drone stays off there.
+        if self.stage >= 12:
+            self.stop_ambient()
+            return False
         if self.ambient_requested:
             self.stop_ambient()
             return False
@@ -1504,7 +1508,7 @@ class StageManager:
                   (panel.centerx, panel.y + 31), (80, 229, 151),
                   align="center", mono=True, bold=True)
         unlock_titles = {
-            1: "INTRUSION CONTAINED // TEAM LINKED",
+            1: "INTRUSION ACTIVE // REGISTER THE TEAM",
             2: "TEAM ROSTER SEALED",
             3: "OIL CIPHER CRACKED",
             4: "PHYSICAL PUZZLE VERIFIED",
