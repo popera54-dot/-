@@ -107,6 +107,8 @@ class LaterStagesController:
             self.verify_index = 0
             self.verify_score = 0.0
             self.code_input = ""
+            self.replay_only = False
+            self.replay_button = None
             self._make_beep()
             if not self.app.players:
                 self.phase = "code"
