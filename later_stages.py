@@ -594,6 +594,12 @@ class LaterStagesController:
                       (255, 220, 125), align="center", mono=True, bold=True)
             if self.error:
                 draw_text(surface, self.error, 16, (width / 2, 625), (255, 75, 91), align="center", bold=True)
+            self.replay_button = pygame.Rect(width / 2 - 170, 655, 340, 46)
+            rounded_panel(surface, self.replay_button, (6, 25, 29), (58, 231, 189), 12, 2)
+            draw_text(surface, "השמעת דפוס הצלילים שוב", 16,
+                      self.replay_button.center, (98, 255, 213), align="center", bold=True)
+        else:
+            self.replay_button = None
         draw_text(surface, f"OSCILLATOR // {int(t * 17) % 9999:04d}", 11,
                   (width / 2, height - 93), (70, 138, 124), align="center", mono=True)
 
