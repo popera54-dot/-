@@ -15,7 +15,9 @@ A cinematic, full-screen Hanukkah escape-room game for Windows, built with Pytho
 - 9 — Digital Inversion with moving numbers, inverted mouse control, and periodic screen rotation inside the game
 - 10 — Family Memory Matrix, three numeric questions, and a repeat exposure when answers are wrong
 - 11 — 180-second Quantum Current Lock; X=64, Y=200, Z=66
-- 12 — Webcam celebration finale with motion/voice energy, original generated synth music, and a 5-to-1 countdown
+- 12 — Webcam celebration finale with motion/voice energy, original generated synth music, a 5-to-1 victory countdown, and a mission debrief with team rank, XP, clears, and errors
+
+The final debrief stays on screen for up to 12 seconds so the team can review the result; press Enter or Space to close it sooner. The celebration music continues under the debrief and the microphone is stopped as soon as the movement finale ends.
 
 The operator console lets you edit the Stage 3 clue location, Stage 7 clue location, and as many Stage 4 puzzle-piece locations as needed. Settings are stored locally in `data/operator_config.json`.
 
@@ -44,7 +46,7 @@ python -m pip install -r requirements.txt
 python main.py
 ```
 
-The finale uses the webcam to estimate movement and optionally opens the microphone through `sounddevice`. Audio input is measured live only to drive the energy meter; the game does not save audio recordings.
+The webcam tries the Windows DirectShow backend first, then OpenCV's default backend. A failed camera read clears the previous frame so stale images cannot be reused for registration or presence checks. The finale uses the webcam to estimate movement and optionally opens the microphone through `sounddevice`. Audio input is measured live only to drive the energy meter; the game does not save audio recordings.
 
 
 ## Sound design
@@ -54,7 +56,8 @@ The finale uses the webcam to estimate movement and optionally opens the microph
 - `F7` toggles the low-volume suspense drone independently, `F8` mutes/restores all game audio, and `F9` / `F10` lower or raise master volume. The current sound level and ambience state appear in the HUD.
 - The soundtrack remains restrained during the main mission, gets subtly louder as the deadline approaches, and adds a low double-heartbeat cue in the final minute before the last-ten-second beeps.
 - Each stage unlock gets a distinct success callout; error tones are triggered by rejected answers, not by repeatedly drawing the error text.
-- If no audio device is available, the game continues without blocking puzzles or stage progression.
+- Sound settings are saved to `data/audio_settings.json`; master mute, ambience on/off, and volume level persist across launches.
+- If no audio output device is available, the HUD says so and the game continues without blocking puzzles or stage progression.
 
 ## Operator controls
 
