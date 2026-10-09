@@ -1176,7 +1176,7 @@ class AudioDirector:
 
     def draw_status(self, surface, draw_text, width, height):
         if not self.available:
-            label, color = "AUDIO OUTPUT UNAVAILABLE", (127, 147, 148)
+            label, color = "AUDIO OFFLINE  //  GAME STILL PLAYABLE", (127, 147, 148)
         elif self.enabled:
             ambience = "AMBIENCE ON" if self.ambient_requested else "AMBIENCE OFF"
             label = f"SOUND {int(self.master_volume * 100)}%  //  F7 {ambience}  F8 MUTE  F9/F10 VOLUME"
