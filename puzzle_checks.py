@@ -128,9 +128,18 @@ def check_stage_5_task_mechanics():
     oil.catches = 0
     oil.done = False
     oil.basket_x = 0.5
-    oil.items = [[0.5, 0.82, 0.0] for _ in range(7)]
+    # At screen y=0.82, the falling-item state is (0.82 - 0.18) / 0.65.
+    catch_y = (0.82 - 0.18) / 0.65
+    oil.items = [[0.5, catch_y, 0.0] for _ in range(7)]
     oil.update_and_collide(0.0, 1600, 900)
     assert oil.catches == 5 and oil.done, f"Oil Catch should stop at 5/5, got {oil.catches}"
+
+    # A can that only overlaps the old, visually incorrect collision band must not count.
+    oil2 = OilCatchTask()
+    oil2.basket_x = 0.5
+    oil2.items = [[0.5, 0.82, 0.0] for _ in range(7)]
+    oil2.update_and_collide(0.0, 1600, 900)
+    assert oil2.catches == 0, f"Oil Catch counted a can above the visible basket: {oil2.catches}"
 
     # Symbol Matrix grid content must match the declared counts with one unique majority.
     matrix = SymbolMatrixTask()
