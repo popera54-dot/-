@@ -7,6 +7,7 @@ import random
 import re
 import sys
 import time
+import traceback
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -38,6 +39,32 @@ DATA_DIR = APP_DIR / "data"
 PLAYER_DIR = DATA_DIR / "players"
 DATA_DIR.mkdir(exist_ok=True)
 PLAYER_DIR.mkdir(exist_ok=True)
+
+
+def _log_uncaught_exception(exc_type, exc, tb):
+    """Persist fatal runtime errors for packaged builds where no console is visible."""
+    log_path = DATA_DIR / "crash.log"
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        if log_path.exists() and log_path.stat().st_size > 1_000_000:
+            log_path.write_text("", encoding="utf-8")
+        with log_path.open("a", encoding="utf-8") as log:
+            log.write("\n=== UNHANDLED GAME ERROR ===\n")
+            log.write(time.strftime("%Y-%m-%d %H:%M:%S") + "\n")
+            log.write(f"Python: {sys.version.split()[0]}\n")
+            log.write(f"Frozen build: {bool(getattr(sys, 'frozen', False))}\n")
+            traceback.print_exception(exc_type, exc, tb, file=log)
+    except Exception:
+        # Logging must never mask the original failure.
+        pass
+    try:
+        if sys.__stderr__ is not None:
+            sys.__excepthook__(exc_type, exc, tb)
+    except Exception:
+        pass
+
+
+sys.excepthook = _log_uncaught_exception
 
 pygame.init()
 pygame.font.init()
@@ -750,7 +777,7 @@ class StageManager:
                 x = int((i * 173 + elapsed * (30 + i * 8)) % (WIDTH - 280))
                 y = int((i * 59 + abs(math.sin(elapsed * 5 + i)) * 300) % (HEIGHT - 90))
                 rect = pygame.Rect(x, y, 260, 64)
-                pygame.draw.rect(surface, (222, 234, 238), rect, border_radius=5)
+                pygame.draw.rect(surface, (222, 234, 238), rect)
                 draw_text(surface, "SYSTEM FAILURE", 12, (x + 12, y + 10), (24, 33, 38), mono=True, bold=True)
                 draw_text(surface, "0x" + format((i * 917 + int(elapsed * 99)) % 65535, "04X"),
                           11, (x + 12, y + 33), (130, 32, 42), mono=True)
@@ -839,7 +866,7 @@ class StageManager:
         if frame:
             # dark overlay + frame
             surface.blit(frame, (cam_rect.x + 6, cam_rect.y + 6))
-            pygame.draw.rect(surface, (65, 255, 210), cam_rect.inflate(-18, -18), 2, border_radius=22)
+            pygame.draw.rect(surface, (65, 255, 210), cam_rect.inflate(-18, -18), 2)
         else:
             draw_text(surface, "WEBCAM OFFLINE", 28, cam_rect.center, (255, 70, 90),
                       align="center", mono=True, bold=True)
@@ -1192,7 +1219,8 @@ class EscapeRoomApp:
                     self.setup_piece_scroll = min(self.setup_piece_scroll, max(0, len(self.setup_puzzle_locations) - 3))
                     return
                 if event.key == pygame.K_RETURN:
-                    self.stage_message = f"מיקום חלק {self.setup_active_piece + 1} נערך."
+                    self.stage_message = f"מיקום חלק {self.setup_active_piece + 1} נערך. לחצו על שמור הגדרות."
+                    self.setup_active_piece = None
                     return
                 if len(event.unicode) == 1 and event.unicode.isprintable():
                     current = self.setup_puzzle_locations[self.setup_active_piece]
@@ -1345,16 +1373,30 @@ class EscapeRoomApp:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 self.running = False
     def handle_secret_keys(self, event):
+        """Return True when a privileged operator shortcut consumed the key event."""
         if event.type != pygame.KEYDOWN:
-            return
-        # Skip stage
-        mods = pygame.key.get_mods()
-        if (mods & pygame.KMOD_CTRL) and (mods & pygame.KMOD_SHIFT) and event.key == pygame.K_RIGHT:
-            if self.state == "game":
-                self.stage_manager.goto(min(12, self.stage_manager.stage + 1))
-        # Emergency exit
-        if (mods & pygame.KMOD_CTRL) and (mods & pygame.KMOD_ALT) and (mods & pygame.KMOD_SHIFT) and event.key == pygame.K_ESCAPE:
+            return False
+        # Use the modifiers captured on this specific event, not a separate keyboard poll.
+        mods = getattr(event, "mod", pygame.key.get_mods())
+        skip_pressed = (
+            (mods & pygame.KMOD_CTRL)
+            and (mods & pygame.KMOD_SHIFT)
+            and event.key == pygame.K_RIGHT
+        )
+        exit_pressed = (
+            (mods & pygame.KMOD_CTRL)
+            and (mods & pygame.KMOD_ALT)
+            and (mods & pygame.KMOD_SHIFT)
+            and event.key == pygame.K_ESCAPE
+        )
+        if exit_pressed:
             self.running = False
+            return True
+        if skip_pressed and self.state == "game":
+            if self.stage_manager.stage < 12:
+                self.stage_manager.goto(self.stage_manager.stage + 1)
+            return True
+        return False
 
     def update(self, dt):
         self.background.update(dt)
@@ -1393,7 +1435,10 @@ class EscapeRoomApp:
         while self.running:
             dt = self.clock.tick(FPS) / 1000.0
             for event in pygame.event.get():
-                self.handle_secret_keys(event)
+                if self.handle_secret_keys(event):
+                    if not self.running:
+                        break
+                    continue
                 if self.state == "setup":
                     self.handle_setup_event(event)
                 else:

@@ -45,7 +45,37 @@ def run():
             pygame.MOUSEBUTTONDOWN, {"button": 1, "pos": exit_button}))
         require(not app.running, "setup Exit button did not exit the app")
         app.running = True
+        # Operator shortcuts must be reliable and must not leak events into the next stage.
         app.state = "game"
+        app.running = True
+        app.stage_manager.goto(3)
+        skip_event = pygame.event.Event(
+            pygame.KEYDOWN,
+            {"key": pygame.K_RIGHT, "mod": pygame.KMOD_CTRL | pygame.KMOD_SHIFT, "unicode": ""}
+        )
+        require(app.handle_secret_keys(skip_event), "skip shortcut was not consumed")
+        require(app.stage_manager.stage == 4, "skip shortcut did not advance exactly one stage")
+        app.stage_manager.goto(12)
+        require(app.handle_secret_keys(skip_event), "final-stage skip was not consumed")
+        require(app.stage_manager.stage == 12, "skip shortcut restarted the final stage")
+        exit_event = pygame.event.Event(
+            pygame.KEYDOWN,
+            {"key": pygame.K_ESCAPE, "mod": pygame.KMOD_CTRL | pygame.KMOD_ALT | pygame.KMOD_SHIFT, "unicode": ""}
+        )
+        require(app.handle_secret_keys(exit_event), "emergency shortcut was not consumed")
+        require(not app.running, "emergency shortcut did not exit")
+
+        # Enter ends physical-location editing; typing afterwards must not append to the row.
+        app.running = True
+        app.state = "setup"
+        app.setup_puzzle_locations = ["behind curtain"]
+        app.setup_active_piece = 0
+        app.handle_setup_event(pygame.event.Event(
+            pygame.KEYDOWN, {"key": pygame.K_RETURN, "unicode": "\r"}
+        ))
+        require(app.setup_active_piece is None, "Enter failed to finish puzzle-location editing")
+        app.state = "game"
+
         # The flashlight must reveal its centre, with darkness increasing toward the edge.
         overlay = app.stage_manager.stage6.make_flashlight_overlay(
             320, 220, (160, 110), pygame, radius=90

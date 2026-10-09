@@ -29,7 +29,7 @@ A Windows build can be produced without installing Python on the target PC:
 - Open the repository's **Actions** tab, select the latest **Build Windows Portable App** run, and download the `TheGreeksAreBack-Windows-x64` artifact. Extract the ZIP and keep the folder intact; run `StartGame.bat` or `TheGreeksAreBack.exe`.
 - To build locally on Windows, double-click `build_windows.bat`. The output folder is `dist\\TheGreeksAreBack`.
 
-The portable build stores its operator configuration and player face templates in a `data` folder next to the executable.
+The portable build stores its operator configuration and player face templates in a `data` folder next to the executable. If the game crashes, a diagnostic `data/crash.log` is written beside it when possible; include that file when reporting a repeatable error.
 
 ## Run from source on Windows
 
