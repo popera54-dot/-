@@ -676,6 +676,16 @@ class Webcam:
         self.face_box = None
         self.available = False
         self.last_error = None
+        self.face_detector = None
+        try:
+            detector_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+            candidate = cv2.CascadeClassifier(detector_path)
+            if not candidate.empty():
+                self.face_detector = candidate
+            else:
+                self.last_error = "OpenCV face detector could not be loaded."
+        except (cv2.error, AttributeError, OSError) as exc:
+            self.last_error = str(exc)
         self._open()
 
     def _open(self):
@@ -694,9 +704,15 @@ class Webcam:
             return None
         frame = cv2.flip(frame, 1)
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        cascade = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-        detector = cv2.CascadeClassifier(cascade)
-        faces = detector.detectMultiScale(gray, 1.15, 5, minSize=(90, 90))
+        # Reuse the cascade instead of reloading its XML file for every video frame.
+        faces = ()
+        if self.face_detector is not None:
+            try:
+                faces = self.face_detector.detectMultiScale(
+                    gray, 1.15, 5, minSize=(90, 90)
+                )
+            except cv2.error as exc:
+                self.last_error = str(exc)
         self.face_box = max(faces, key=lambda b: b[2] * b[3]) if len(faces) else None
         self.frame = frame
         return frame
