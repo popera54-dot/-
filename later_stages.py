@@ -69,6 +69,8 @@ class LaterStagesController:
         self.sequence = []
         self.number_positions = {}
         self.number_velocities = {}
+        self.replay_only = False
+        self.replay_button = None
 
     def _stop_mic(self):
         if self._mic_stream is not None:
