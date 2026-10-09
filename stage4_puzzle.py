@@ -469,6 +469,7 @@ class Stage4Controller:
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             if self.route_input_rect and self.route_input_rect.collidepoint(event.pos):
                 self.route_input_active = True
+                self.error = ""
                 return
             if self.route_verify_button and self.route_verify_button.collidepoint(event.pos):
                 self._verify_route_answer()
