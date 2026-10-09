@@ -867,7 +867,9 @@ class AudioDirector:
             ):
                 active = (t >= start) & (t < start + duration)
                 local = t[active] - start
-                swell = np.sin(np.pi * np.clip(local / duration, 0.0, 1.0)) ** 1.5
+                swell = np.maximum(
+                    0.0, np.sin(np.pi * np.clip(local / duration, 0.0, 1.0))
+                ) ** 1.5
                 wave[active] += amplitude * swell * (
                     np.sin(2.0 * np.pi * (frequency * local - 13.0 * local * local))
                     + 0.20 * np.sin(2.0 * np.pi * frequency * 2.0 * local)
