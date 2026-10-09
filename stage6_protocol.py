@@ -74,6 +74,8 @@ class Stage6Controller:
                 if event.key == pygame.K_BACKSPACE:
                     self.app.cipher_digits = self.app.cipher_digits[:-1]
                 elif event.unicode.isdigit() and len(self.app.cipher_digits) < 4:
+                    if not self.app.cipher_digits:
+                        self.app.stage_message = ""
                     self.app.cipher_digits.append(event.unicode)
                     if len(self.app.cipher_digits) == 4:
                         if "".join(self.app.cipher_digits) == "8421":
