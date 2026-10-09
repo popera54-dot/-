@@ -100,12 +100,6 @@ class Stage6Controller:
 
         mx, my = pygame.mouse.get_pos()
 
-        # Source-defined flashlight overlay. Alpha rises from transparent at the
-        # cursor to near-black at the edge, leaving a true illuminated centre.
-        light_radius = 108 + int((math.sin(t * 3.1) + 1) * 9)
-        dark = self.make_flashlight_overlay(width, height, (mx, my), pygame, light_radius)
-        surface.blit(dark, (0, 0))
-
         if self.phase == "dark":
             draw_text(surface, "DARK LIGHT PROTOCOL", 14, (width / 2, 55),
                       (70, 255, 210), align="center", mono=True, bold=True)
@@ -177,3 +171,10 @@ class Stage6Controller:
             draw_text(surface, "PRESENCE VERIFIED // CORE INPUT READY",
                       11, (width / 2, 335), (59, 187, 143),
                       align="center", mono=True)
+
+        # Darken the complete frame after all HUD, instructions, camera content,
+        # and the hidden control have been drawn. The cursor-sized light then
+        # reveals only the pixels beneath it instead of leaving text always visible.
+        light_radius = 108 + int((math.sin(t * 3.1) + 1) * 9)
+        dark = self.make_flashlight_overlay(width, height, (mx, my), pygame, light_radius)
+        surface.blit(dark, (0, 0))
