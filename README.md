@@ -21,6 +21,8 @@ The operator console lets you edit the Stage 3 clue location, Stage 7 clue locat
 
 The 10-minute Trivia Lifeline can appear while the family is in stages 5–11; every correct answer adds 60 seconds. The adaptive time manager can skip intermediate stages when there is no longer enough time to complete the remaining challenges and finale.
 
+Successful puzzle clears award team XP, with a speed bonus for quick solves. Rejected submissions increment the team error count and trigger a one-shot error cue; the finale shows total XP, cleared stages, errors, and a team rank based on time remaining and mistakes.
+
 ## Portable Windows build
 
 A Windows build can be produced without installing Python on the target PC:
