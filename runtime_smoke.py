@@ -28,6 +28,12 @@ def run():
                 "Hebrew text is not reordered for Pygame rendering")
         require(main._display_text("קוד 8421") == "8421 דוק",
                 f"mixed Hebrew/digit text has incorrect visual order: {main._display_text('קוד 8421')}")
+        require(main._scanline_layer((80, 60), 5, 16) is main._scanline_layer((80, 60), 5, 16),
+                "scanline overlay was not cached between frames")
+        require(main._scan_beam_layer(80, 90) is main._scan_beam_layer(80, 90),
+                "scan beam surface was not cached between frames")
+        require(main._glow_layer(12, (50, 220, 180), 13) is main._glow_layer(12, (50, 220, 180), 13),
+                "glow surface was not cached between frames")
 
         panel_probe = pygame.Surface((80, 50))
         panel_probe.fill((0, 0, 0))

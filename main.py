@@ -172,21 +172,49 @@ def rounded_panel(surface, rect, fill, border=(70, 255, 210), radius=24, width=1
                              (rail_end, r.top + 1), max(1, width))
 
 
-def glow_circle(surface, pos, radius, color, alpha=45):
+@lru_cache(maxsize=12)
+def _glow_layer(radius: int, color: tuple, alpha: int):
+    """Build reusable glow pixels once; the cached surface is never mutated."""
+    radius = max(1, int(radius))
     layer = pygame.Surface((radius * 6, radius * 6), pygame.SRCALPHA)
-    cx, cy = radius * 3, radius * 3
+    cx = cy = radius * 3
     for r in range(radius * 3, max(2, radius // 2), -4):
         a = int(alpha * (1 - r / (radius * 3)) ** 2)
         pygame.draw.circle(layer, (*color, a), (cx, cy), r)
     pygame.draw.circle(layer, (*color, min(255, alpha * 3)), (cx, cy), radius)
-    surface.blit(layer, (pos[0] - cx, pos[1] - cy))
+    return layer
+
+
+def glow_circle(surface, pos, radius, color, alpha=45):
+    radius = max(1, int(radius))
+    color = tuple(color)
+    layer = _glow_layer(radius, color, int(alpha))
+    cx = cy = radius * 3
+    surface.blit(layer, (int(pos[0]) - cx, int(pos[1]) - cy))
+
+
+@lru_cache(maxsize=4)
+def _scanline_layer(size: tuple, spacing: int, alpha: int):
+    """Reuse immutable scanline surfaces across frames and stages."""
+    width, height = size
+    spacing = max(1, int(spacing))
+    overlay = pygame.Surface((width, height), pygame.SRCALPHA)
+    for y in range(0, height, spacing):
+        pygame.draw.line(overlay, (140, 255, 225, int(alpha)), (0, y), (width, y))
+    return overlay
 
 
 def draw_scanlines(surface, spacing=5, alpha=16):
-    overlay = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
-    for y in range(0, surface.get_height(), spacing):
-        pygame.draw.line(overlay, (140, 255, 225, alpha), (0, y), (surface.get_width(), y))
-    surface.blit(overlay, (0, 0))
+    surface.blit(_scanline_layer(surface.get_size(), int(spacing), int(alpha)), (0, 0))
+
+
+@lru_cache(maxsize=4)
+def _scan_beam_layer(width: int, height: int = 90):
+    """The horizontal scan beam is static; only its blit position changes."""
+    beam = pygame.Surface((int(width), int(height)), pygame.SRCALPHA)
+    pygame.draw.rect(beam, (45, 255, 203, 12), (0, 36, width, 18))
+    pygame.draw.rect(beam, (45, 255, 203, 5), (0, 10, width, 52))
+    return beam
 
 
 def draw_grid(surface, horizon_y=None):
@@ -204,12 +232,9 @@ def draw_live_system_overlay(surface, t: float, danger: float = 0.0):
     Always-on ambient motion layer. It intentionally keeps moving even while
     players are reading a puzzle so the screen never feels static.
     """
-    # Moving scan beam
+    # Moving scan beam uses a cached layer; animation comes from its position.
     beam_y = int((t * 115) % (HEIGHT + 180)) - 90
-    beam = pygame.Surface((WIDTH, 90), pygame.SRCALPHA)
-    pygame.draw.rect(beam, (45, 255, 203, 12), (0, 36, WIDTH, 18))
-    pygame.draw.rect(beam, (45, 255, 203, 5), (0, 10, WIDTH, 52))
-    surface.blit(beam, (0, beam_y))
+    surface.blit(_scan_beam_layer(WIDTH, 90), (0, beam_y))
 
     # Corner targeting brackets with subtle breathing animation.
     pulse = 0.5 + 0.5 * math.sin(t * 2.7)
