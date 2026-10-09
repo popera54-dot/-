@@ -293,9 +293,12 @@ def run():
         app.state = "game"
 
         # The flashlight must reveal its centre, with darkness increasing toward the edge.
+        reusable_mask = pygame.Surface((320, 220), pygame.SRCALPHA)
         overlay = app.stage_manager.stage6.make_flashlight_overlay(
-            320, 220, (160, 110), pygame, radius=90
+            320, 220, (160, 110), pygame, radius=90, target_surface=reusable_mask
         )
+        require(overlay is reusable_mask,
+                "flashlight renderer did not reuse its supplied alpha surface")
         alpha_map = pygame.surfarray.array_alpha(overlay)
         center_alpha = int(alpha_map[160, 110])
         middle_alpha = int(alpha_map[205, 110])
@@ -318,6 +321,15 @@ def run():
         corner = test_surface.get_at((12, 12))
         require(max(corner.r, corner.g, corner.b) < 30,
                 f"stage 6 flashlight left UI text visible outside its beam: {corner}")
+        flashlight_surface_id = id(app.stage_manager.stage6._flashlight_surface)
+        pygame.mouse.set_pos((main.WIDTH // 2 + 100, main.HEIGHT // 2 + 40))
+        app.stage_manager.stage6.draw(
+            test_surface, mark_drawn_text, main.rounded_panel,
+            main.glow_circle, pygame, main.WIDTH, main.HEIGHT,
+            app.background.time + 0.2
+        )
+        require(id(app.stage_manager.stage6._flashlight_surface) == flashlight_surface_id,
+                "stage 6 allocated a new full-screen flashlight surface between frames")
         pygame.mouse.set_pos((main.WIDTH // 2, main.HEIGHT // 2))
 
         # Render the operator console and all twelve actual game stages, not just later-stage screens.
@@ -475,11 +487,17 @@ def run():
 
         # The finale energy meter must still progress with no camera frame or microphone.
         original_read = app.webcam.read
-        app.webcam.read = lambda: None
+        read_modes = []
+        def motion_only_read(detect_face=True):
+            read_modes.append(detect_face)
+            return None
+        app.webcam.read = motion_only_read
         later.energy = 0.0
         later.dance_started = time.monotonic() - 10
         later._update_energy(1.0, time.monotonic())
         require(later.energy >= 0.8, "stage 12 energy fallback did not progress without camera")
+        require(read_modes and read_modes[-1] is False,
+                "stage 12 ran unnecessary face detection during motion-only scoring")
 
         # The finale cannot end before the specified minimum 90-second celebration.
         later.energy = 99.99
