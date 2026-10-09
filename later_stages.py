@@ -439,6 +439,8 @@ class LaterStagesController:
             if event.key == pygame.K_BACKSPACE:
                 self.code_input = self.code_input[:-1]
             elif event.unicode.isdigit() and len(self.code_input) < 4:
+                if not self.code_input:
+                    self.error = ""
                 self.code_input += event.unicode
                 if len(self.code_input) == 4:
                     if self.code_input == "3514":
@@ -460,6 +462,7 @@ class LaterStagesController:
             if rr.collidepoint(pos):
                 expected = self.sequence[self.next_number_index]
                 if number == expected:
+                    self.error = ""
                     self.next_number_index += 1
                     if self.next_number_index >= len(self.sequence):
                         self.app.stage_message = "INVERSION OVERRIDE // ACCEPTED"
@@ -525,6 +528,7 @@ class LaterStagesController:
             for i, rr in enumerate(self.quantum_field_rects):
                 if rr.collidepoint(event.pos):
                     self.quantum_active_field = i
+                    self.quantum_error = ""
                     return
             if self.quantum_submit and self.quantum_submit.collidepoint(event.pos):
                 self._submit_quantum()
