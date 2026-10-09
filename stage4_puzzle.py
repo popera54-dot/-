@@ -35,6 +35,7 @@ class Stage4Controller:
         self.route_input_rect = None
         self.route_verify_button = None
         self.error = ""
+        self._generation_attempt = 0
         self.generate_puzzle()
 
     def start(self):
