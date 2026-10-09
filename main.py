@@ -1215,18 +1215,56 @@ class Webcam:
         self._open()
 
     def _open(self):
+        """Try the Windows DirectShow backend first, then OpenCV's platform default."""
+        candidates = []
         try:
-            self.cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-            self.available = bool(self.cap and self.cap.isOpened())
+            candidates.append(cv2.VideoCapture(0, cv2.CAP_DSHOW))
         except Exception as exc:
             self.last_error = str(exc)
-            self.available = False
+
+        # CAP_DSHOW is Windows-specific. The generic backend is a necessary fallback
+        # for laptops using another camera stack, virtual cameras, and non-Windows smoke tests.
+        try:
+            candidates.append(cv2.VideoCapture(0))
+        except Exception as exc:
+            self.last_error = str(exc)
+
+        for candidate in candidates:
+            try:
+                if candidate is not None and candidate.isOpened():
+                    self.cap = candidate
+                    self.available = True
+                    self.last_error = None
+                    return
+                if candidate is not None:
+                    candidate.release()
+            except Exception as exc:
+                self.last_error = str(exc)
+                try:
+                    if candidate is not None:
+                        candidate.release()
+                except Exception:
+                    pass
+
+        self.cap = None
+        self.available = False
+        if not self.last_error:
+            self.last_error = "No usable webcam backend opened camera index 0."
 
     def read(self, detect_face=True):
-        if not self.available:
+        if not self.available or self.cap is None:
+            self.frame = None
+            self.face_box = None
             return None
-        ok, frame = self.cap.read()
-        if not ok:
+        try:
+            ok, frame = self.cap.read()
+        except (cv2.error, AttributeError, RuntimeError) as exc:
+            self.last_error = str(exc)
+            ok, frame = False, None
+        if not ok or frame is None:
+            # Never leave an old frame eligible for registration or presence verification.
+            self.frame = None
+            self.face_box = None
             return None
         frame = cv2.flip(frame, 1)
         self.frame = frame
@@ -1286,8 +1324,15 @@ class Webcam:
         return pygame.image.frombuffer(rgb.tobytes(), size, "RGB").copy()
 
     def release(self):
-        if self.cap:
-            self.cap.release()
+        if self.cap is not None:
+            try:
+                self.cap.release()
+            except Exception:
+                pass
+        self.cap = None
+        self.available = False
+        self.frame = None
+        self.face_box = None
 
 
 class Player:
