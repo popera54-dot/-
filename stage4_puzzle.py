@@ -28,12 +28,24 @@ class Stage4Controller:
         self.finish_cell = None
         self.maze_rect = None
         self.complete_button = None
+        self.route_answer = ""
+        self.route_verified = False
+        self.puzzle_confirmed = False
+        self.route_input_active = False
+        self.route_input_rect = None
+        self.route_verify_button = None
+        self.error = ""
         self.generate_puzzle()
 
     def start(self):
         self.phase = "solve"
         self.location_scroll = 0
         self.started_at = self.app.background.time
+        self.route_answer = ""
+        self.route_verified = False
+        self.puzzle_confirmed = False
+        self.route_input_active = False
+        self.error = ""
         self.generate_puzzle()
 
     def update(self, dt):
@@ -110,13 +122,14 @@ class Stage4Controller:
         rng = random.Random(random.randint(1, 2_000_000_000))
         floors = list(dist.keys())
         blocked = set(self.target_cells.values()) | {start, self.finish_cell}
+        decoy_types = ("candle", "star", "coin", "flame", "oil_drop")
         rng.shuffle(floors)
         self.decoy_items = {}
         for cell in floors:
             if cell in blocked or cell in self.decoy_items:
                 continue
             if rng.random() < 0.20:
-                self.decoy_items[cell] = rng.choice(self.ICONS)
+                self.decoy_items[cell] = rng.choice(decoy_types)
             if len(self.decoy_items) >= 22:
                 break
 
@@ -256,7 +269,26 @@ class Stage4Controller:
         draw_text(surface, f"{len(locs):02d} PIECES CONFIGURED", 10,
                   (panel.x + 20, panel.y + 168), (118, 149, 153), mono=True)
 
-        list_top = panel.y + 190
+        self.route_input_rect = pygame.Rect(panel.x + 18, panel.y + 181, 142, 40)
+        rounded_panel(surface, self.route_input_rect, (2, 13, 18),
+                      (255, 194, 78) if self.route_input_active else (45, 91, 90), 10, 2)
+        draw_text(surface, self.route_answer or "__", 22, self.route_input_rect.center,
+                  (255, 218, 120), align="center", mono=True, bold=True)
+
+        self.route_verify_button = pygame.Rect(self.route_input_rect.right + 10,
+                                                self.route_input_rect.y,
+                                                min(170, panel.w - 210), 40)
+        rounded_panel(surface, self.route_verify_button,
+                      (8, 27, 30), (67, 255, 205) if self.route_verified else (63, 124, 116), 10, 2)
+        draw_text(surface, "יציאה 15 ✓" if self.route_verified else "בדיקת יציאה",
+                  13, self.route_verify_button.center,
+                  (93, 255, 209) if self.route_verified else (226, 238, 238),
+                  align="center", bold=True)
+        if self.error:
+            draw_text(surface, self.error, 11,
+                      (panel.x + 18, panel.y + 225), (255, 75, 91), bold=True)
+
+        list_top = panel.y + 245
         row_h = 38
         visible = max(1, int((panel.bottom - 28 - list_top) / row_h))
         self.location_scroll = max(0, min(max(0, len(locs) - visible), self.location_scroll))
@@ -326,29 +358,72 @@ class Stage4Controller:
 
         self.complete_button = pygame.Rect(right_x, height - 52, right_w, 40)
         hovered = self.complete_button.collidepoint(pygame.mouse.get_pos())
+        if not self.route_verified:
+            button_label = "פתרו את המבוך והקלידו 15"
+            button_color = (75, 112, 112)
+        elif not self.puzzle_confirmed:
+            button_label = "אשרו שהפאזל הפיזי 48 הורכב"
+            button_color = (255, 194, 78)
+        else:
+            button_label = "החידה הושלמה // ממשיכים"
+            button_color = (65, 255, 195)
         rounded_panel(surface, self.complete_button,
                       (14, 27, 31) if not hovered else (16, 40, 43),
-                      (255, 194, 78) if hovered else (80, 150, 140), 12, 2)
-        draw_text(surface, "מצאנו את 15 + הרכבנו את 48  //  ממשיכים",
-                  14, self.complete_button.center,
+                      button_color, 12, 2)
+        draw_text(surface, button_label, 14, self.complete_button.center,
                   (255, 223, 133), align="center", bold=True)
 
         draw_text(surface, "EYES ONLY  •  המסלול אינו מסומן  •  הפתרון מתבצע בחדר",
                   10, (right_x, height - 12),
                   (89, 120, 125), mono=True)
 
+    def _verify_route_answer(self):
+        if self.route_answer == "15":
+            self.route_verified = True
+            self.error = ""
+            self.app.stage_message = "ROUTE VERIFIED // 15"
+        else:
+            self.route_verified = False
+            self.error = "המסלול הנכון חייב להגיע ליציאה 15."
+            self.route_answer = ""
+
     def handle(self, event, pygame, width, height):
+        if event.type == pygame.KEYDOWN and self.route_input_active:
+            if event.key == pygame.K_BACKSPACE:
+                self.route_answer = self.route_answer[:-1]
+            elif event.key == pygame.K_RETURN:
+                self._verify_route_answer()
+                self.route_input_active = False
+            elif event.unicode.isdigit() and len(self.route_answer) < 2:
+                self.route_answer += event.unicode
+            return
+
         if event.type == pygame.MOUSEWHEEL:
             right_panel = pygame.Rect(int(width * .51), 174, int(width * .47), height - 236)
             if right_panel.collidepoint(pygame.mouse.get_pos()):
                 locs = [x.strip() for x in self.app.setup_puzzle_locations if x.strip()]
-                visible = max(1, int((right_panel.bottom - 28 - (right_panel.y + 190)) / 38))
+                visible = max(1, int((right_panel.bottom - 28 - (right_panel.y + 245)) / 38))
                 self.location_scroll = max(0, min(max(0, len(locs) - visible),
                                                   self.location_scroll - event.y))
             return
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self.route_input_rect and self.route_input_rect.collidepoint(event.pos):
+                self.route_input_active = True
+                return
+            if self.route_verify_button and self.route_verify_button.collidepoint(event.pos):
+                self._verify_route_answer()
+                self.route_input_active = False
+                return
             if self.complete_button and self.complete_button.collidepoint(event.pos):
+                if not self.route_verified:
+                    self.error = "תחילה פתרו את המסלול והקלידו 15."
+                    return
+                if not self.puzzle_confirmed:
+                    self.puzzle_confirmed = True
+                    self.error = ""
+                    self.app.stage_message = "PHYSICAL PUZZLE // 48 CONFIRMED"
+                    return
                 self.phase = "complete"
                 self.app.stage_message = "STAGE 04 CLEARED  //  15 + 48 CONFIRMED"
                 self.app.stage_manager.goto(5)
