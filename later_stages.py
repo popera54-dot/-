@@ -238,11 +238,11 @@ class LaterStagesController:
                 self.memory_started = now
                 self.memory_attempt += 1
 
-        elif self.stage == 11 and self.phase == "input":
-            if now - self.quantum_started >= 180:
+        elif self.stage == 11:
+            if self.phase == "input" and now - self.quantum_started >= 180:
                 self.phase = "timeout"
                 self.quantum_done_at = now
-            if self.phase == "timeout" and now - (self.quantum_done_at or now) >= 2.2:
+            elif self.phase == "timeout" and now - (self.quantum_done_at or now) >= 2.2:
                 self.app.stage_message = "TIME MANAGER // FINAL PROTOCOL"
                 self.app.stage_manager.goto(12)
 
