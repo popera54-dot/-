@@ -19,6 +19,9 @@ def require(condition, message):
 
 def run():
     app = main.EscapeRoomApp()
+    audio_settings_temp = tempfile.TemporaryDirectory()
+    original_audio_settings_path = app.audio.settings_path
+    app.audio.settings_path = Path(audio_settings_temp.name) / "audio_settings.json"
     app.state = "game"
     app.game_started_at = time.monotonic()
     app.timer_frozen = None
@@ -49,6 +52,17 @@ def run():
             for name in expected_sounds:
                 raw = app.audio.sounds[name].get_raw()
                 require(bool(raw) and any(raw), f"synthesized {name} cue is silent")
+        if app.audio.ambient_sound is not None and pygame.mixer.get_init():
+            channels = pygame.mixer.get_init()[2]
+            ambient_samples = main.np.frombuffer(
+                app.audio.ambient_sound.get_raw(), dtype=main.np.int16
+            ).reshape(-1, channels)
+            seam_delta = int(main.np.max(main.np.abs(
+                ambient_samples[0].astype(main.np.int32)
+                - ambient_samples[-1].astype(main.np.int32)
+            )))
+            require(seam_delta < 300,
+                    f"ambient loop has a discontinuity at the loop seam: {seam_delta}")
         prior_audio_state = app.audio.enabled
         require(app.audio.toggle() != prior_audio_state, "F8 audio toggle did not change state")
         app.audio.play("unlock")  # Must be harmless while muted.
@@ -75,6 +89,24 @@ def run():
                 "master volume upper bound is not enforced")
         app.audio.master_volume = original_volume
         app.audio._apply_volume()
+
+        # Audio preferences survive restarts and ignore a malformed/missing settings file.
+        prefs_path = Path(audio_settings_temp.name) / "roundtrip.json"
+        prefs_writer = main.AudioDirector.__new__(main.AudioDirector)
+        prefs_writer.settings_path = prefs_path
+        prefs_writer.enabled = False
+        prefs_writer.master_volume = 0.63
+        prefs_writer.ambient_requested = False
+        prefs_writer._save_preferences()
+        prefs_reader = main.AudioDirector.__new__(main.AudioDirector)
+        prefs_reader.settings_path = prefs_path
+        prefs_reader.enabled = True
+        prefs_reader.master_volume = 0.78
+        prefs_reader.ambient_requested = True
+        prefs_reader._load_preferences()
+        require(not prefs_reader.enabled and abs(prefs_reader.master_volume - 0.63) < 0.001
+                and not prefs_reader.ambient_requested,
+                "audio preferences did not survive a save/load cycle")
 
         # Suspense cues trigger only at their intended timer checkpoints.
         app.audio.update(300, 4)
@@ -447,7 +479,13 @@ def run():
         oil.items = [[0.5, catch_y, 0.0]]
         stage5.tasks = [oil]
         stage5.update(0.0)
-        require(app.stage_manager.stage == 6, "Stage 5 waited for another input after Oil Catch completed")
+        require(stage5.phase == "task_clear",
+                "update-driven Oil Catch completion skipped the success beat")
+        stage5.draw(main.screen)
+        stage5.phase_started = time.monotonic() - 1.2
+        stage5.update(0.0)
+        require(app.stage_manager.stage == 6,
+                "Stage 5 did not advance automatically after its success beat")
         app.players = []
 
         # Stage changes trigger a short unlock animation and release it after its lifetime.
@@ -500,6 +538,8 @@ def run():
         print("HEADLESS RUNTIME SMOKE TEST PASSED")
     finally:
         app.stage_manager.later._stop_mic()
+        app.audio.settings_path = original_audio_settings_path
+        audio_settings_temp.cleanup()
         app.webcam.release()
         pygame.quit()
 
