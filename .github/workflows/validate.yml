@@ -17,7 +17,7 @@ jobs:
           python-version: "3.11"
 
       - name: Compile all Python sources
-        run: python -m py_compile main.py stage5_tasks.py stage6_protocol.py stage7_server_cipher.py puzzle_checks.py
+        run: python -m py_compile main.py stage4_puzzle.py stage5_tasks.py stage6_protocol.py stage7_server_cipher.py later_stages.py puzzle_checks.py
 
       - name: Run fixed-value puzzle checks
         run: python puzzle_checks.py
