@@ -258,6 +258,14 @@ class Stage4Controller:
         pygame.draw.line(surface, (52, 221, 177),
                          (scan_x, inner.top), (scan_x, inner.bottom), 2)
 
+    def _configured_locations(self):
+        """Return non-empty location labels with their original physical-piece numbers."""
+        return [
+            (index + 1, value.strip())
+            for index, value in enumerate(self.app.setup_puzzle_locations)
+            if value.strip()
+        ]
+
     def _draw_location_board(self, surface, panel, pygame, draw_text, rounded_panel):
         rounded_panel(surface, panel, (4, 13, 19, 245), (43, 100, 100), 24, 2)
         draw_text(surface, "PHYSICAL PUZZLE // PIECES", 13,
@@ -272,7 +280,7 @@ class Stage4Controller:
         draw_text(surface, "48", 44, blueprint.center,
                   (255, 218, 120), align="center", mono=True, bold=True)
 
-        locs = [x.strip() for x in self.app.setup_puzzle_locations if x.strip()]
+        locs = self._configured_locations()
         draw_text(surface, f"{len(locs):02d} PIECES CONFIGURED", 10,
                   (panel.x + 20, panel.y + 168), (118, 149, 153), mono=True)
 
@@ -313,10 +321,10 @@ class Stage4Controller:
             y = list_top + row * row_h
             rr = pygame.Rect(panel.x + 16, y, panel.w - 32, row_h - 6)
             rounded_panel(surface, rr, (5, 22, 27), (30, 71, 75), 9, 1)
-            draw_text(surface, f"חלק {idx + 1:02d}", 11,
+            piece_number, value = locs[idx]
+            draw_text(surface, f"חלק {piece_number:02d}", 11,
                       (rr.x + 10, rr.centery), (255, 194, 78),
                       align="midleft", mono=True, bold=True)
-            value = locs[idx]
             preview = value if len(value) <= 52 else value[:49] + "..."
             draw_text(surface, preview, 13, (rr.x + 95, rr.centery),
                       (226, 235, 237), align="midleft")
