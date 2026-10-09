@@ -110,6 +110,34 @@ def run():
         later.update(0.016)
         require(later.phase == "code" and not later.replay_only, "stage 8 replay did not return to code entry")
 
+        # Stage 10 snapshot must be hidden before exposure and during the retry notice.
+        later.start(10)
+        original_scene = later._draw_memory_scene
+        scene_calls = []
+        def track_memory_scene(*args):
+            scene_calls.append(True)
+            return original_scene(*args)
+        later._draw_memory_scene = track_memory_scene
+        later._draw_stage10(
+            main.screen, main.draw_text, main.rounded_panel, main.glow_circle,
+            pygame, main.WIDTH, main.HEIGHT, app.background.time
+        )
+        require(not scene_calls, "stage 10 revealed the image before the 30-second timer")
+        later.phase = "retry_notice"
+        later._draw_stage10(
+            main.screen, main.draw_text, main.rounded_panel, main.glow_circle,
+            pygame, main.WIDTH, main.HEIGHT, app.background.time
+        )
+        require(not scene_calls, "stage 10 revealed the image during the retry notice")
+        later.phase = "memory"
+        later.memory_started = time.monotonic()
+        later._draw_stage10(
+            main.screen, main.draw_text, main.rounded_panel, main.glow_circle,
+            pygame, main.WIDTH, main.HEIGHT, app.background.time
+        )
+        require(len(scene_calls) == 1, "stage 10 did not show the image during timed exposure")
+        later._draw_memory_scene = original_scene
+
         # Memory image timer advances to questions; correct answers unlock the quantum lock.
         app.stage_manager.goto(10)
         later.phase = "memory"
