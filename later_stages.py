@@ -355,7 +355,9 @@ class LaterStagesController:
             self.number_velocities[number] = [vx, vy]
 
     def _update_energy(self, dt, now):
-        frame = self.app.webcam.read()
+        # Motion tracking needs frames but not face boxes; skipping the cascade is cheaper
+        # and reduces latency during the finale, where the camera is sampled every update.
+        frame = self.app.webcam.read(detect_face=False)
         motion = 0.0
         if frame is not None:
             try:
