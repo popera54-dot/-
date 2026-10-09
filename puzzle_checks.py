@@ -2,6 +2,8 @@
 
 from collections import Counter
 
+import pygame
+
 from stage4_puzzle import Stage4Controller
 from stage5_tasks import (
     CyberMemoryTask,
@@ -149,16 +151,42 @@ def check_stage_5_task_mechanics():
     assert sum(count == max_count for count in visible_counts.values()) == 1
     assert visible_counts[matrix.target] == max_count
 
+    # The symbol matrix choices must work with mouse clicks as well as number keys.
+    wrong_index = (matrix.SYMBOLS.index(matrix.target) + 1) % len(matrix.SYMBOLS)
+    wrong_rect = pygame.Rect(1600 / 2 - 210 + wrong_index * 150, 900 - 125, 130, 55)
+    matrix.handle(pygame.event.Event(pygame.MOUSEBUTTONDOWN, {"button": 1, "pos": wrong_rect.center}),
+                  pygame, 1600, 900)
+    assert not matrix.done
+    right_index = matrix.SYMBOLS.index(matrix.target)
+    right_rect = pygame.Rect(1600 / 2 - 210 + right_index * 150, 900 - 125, 130, 55)
+    matrix.handle(pygame.event.Event(pygame.MOUSEBUTTONDOWN, {"button": 1, "pos": right_rect.center}),
+                  pygame, 1600, 900)
+    assert matrix.done
+
     # Word decrypt shows a rearrangement of the actual answer.
     word = WordDecryptTask()
     assert word.answer in word.words
     assert Counter(word.scrambled) == Counter(word.answer)
+    assert word.scrambled != list(word.answer), "Word Decrypt should never display an already-solved word"
 
     # Cyber Memory has four pairs and eight cards.
     memory = CyberMemoryTask()
     values = Counter(memory.values)
     assert len(memory.values) == 8
     assert len(values) == 4 and all(count == 2 for count in values.values())
+
+    # Memory-card hitboxes must match the drawn cards, not include gaps.
+    width, height = 1600, 900
+    first_card = pygame.Rect(width / 2 - 320, 185, 145, 125)
+    memory.handle(pygame.event.Event(pygame.MOUSEBUTTONDOWN,
+                                    {"button": 1, "pos": first_card.center}),
+                  pygame, width, height)
+    assert memory.revealed[0]
+    gap_position = (first_card.right + 7, first_card.centery)
+    memory.handle(pygame.event.Event(pygame.MOUSEBUTTONDOWN,
+                                    {"button": 1, "pos": gap_position}),
+                  pygame, width, height)
+    assert memory.first == 0 and memory.second is None and not memory.revealed[1]
 
     # Trivia's declared answer agrees with its displayed option.
     trivia = TriviaTask()
