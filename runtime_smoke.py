@@ -52,6 +52,32 @@ def run():
         require(app.stage_manager.stage == 12, "stage 11 correct values did not unlock finale")
         app.stage_manager.draw(main.screen)
 
+        # The finale energy meter must still progress with no camera frame or microphone.
+        original_read = app.webcam.read
+        app.webcam.read = lambda: None
+        later.energy = 0.0
+        later.dance_started = time.monotonic() - 10
+        later._update_energy(1.0, time.monotonic())
+        require(later.energy >= 0.8, "stage 12 energy fallback did not progress without camera")
+
+        # The finale cannot end before the specified minimum 90-second celebration.
+        later.energy = 99.99
+        later.phase = "dance"
+        later.dance_started = time.monotonic() - 89
+        later._update_energy(0.02, time.monotonic())
+        require(later.phase == "dance", "stage 12 ended before the 90-second minimum")
+        later.dance_started = time.monotonic() - 91
+        later._update_energy(0.02, time.monotonic())
+        require(later.phase == "countdown", "stage 12 did not enter countdown when energy was full")
+        app.webcam.read = original_read
+
+        # The last-ten-minute lifeline should work in stages 8 through 11 too.
+        app.timer_frozen = None
+        app.game_started_at = time.monotonic() - (main.TOTAL_SECONDS - 599)
+        app.stage_manager.goto(8)
+        later.lifeline_update()
+        require(later.lifeline_active, "stage 8 did not trigger the last-ten-minute lifeline")
+
         print("HEADLESS RUNTIME SMOKE TEST PASSED")
     finally:
         app.stage_manager.later._stop_mic()
