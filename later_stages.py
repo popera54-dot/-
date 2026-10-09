@@ -56,7 +56,16 @@ class LaterStagesController:
         self.lifeline_feedback = ""
         self.lifeline_feedback_until = 0.0
         self._memory_scene_seed = 2026
-        self.start(8)
+        self.lifeline_option_rects = []
+        self.memory_start_button = None
+        self.memory_field_rects = []
+        self.memory_submit = None
+        self.quantum_field_rects = []
+        self.quantum_submit = None
+        self.number_rects = {}
+        self.sequence = []
+        self.number_positions = {}
+        self.number_velocities = {}
 
     def _stop_mic(self):
         if self._mic_stream is not None:
@@ -507,8 +516,8 @@ class LaterStagesController:
                   (255, 61, 80), align="center", mono=True, bold=True)
         draw_text(canvas, "פרוטוקול ההיפוך הדיגיטלי של אנטיוכוס 2.0. שיגעתי אתכם! לחצו על המספרים מהקטן לגדול",
                   20, (width / 2, 106), (242, 248, 249), align="center", bold=True)
-        draw_text(canvas, f"NEXT TARGET // {self.sequence[self.next_number_index] if self.next_number_index < 10 else 'DONE'}",
-                  17, (width / 2, 151), (255, 194, 78), align="center", mono=True, bold=True)
+        draw_text(canvas, "CLICK ALL 10 NUMBERS // SMALLEST TO LARGEST", 15,
+                  (width / 2, 151), (255, 194, 78), align="center", mono=True, bold=True)
         draw_text(canvas, f"PROGRESS // {self.next_number_index:02d}/10", 13,
                   (width / 2, 184), (70, 255, 210), align="center", mono=True)
         self.number_rects = {}
