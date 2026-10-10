@@ -74,6 +74,24 @@ def run():
             )))
             require(seam_delta < 300,
                     f"ambient loop has a discontinuity at the loop seam: {seam_delta}")
+
+        # The additional radio layer should be real audio and remain click-free at its loop seam.
+        texture = app.audio.ambient_texture_sound
+        if texture is not None and pygame.mixer.get_init():
+            channels = pygame.mixer.get_init()[2]
+            texture_samples = main.np.frombuffer(
+                texture.get_raw(), dtype=main.np.int16
+            ).reshape(-1, channels)
+            texture_seam = int(main.np.max(main.np.abs(
+                texture_samples[0].astype(main.np.int32)
+                - texture_samples[-1].astype(main.np.int32)
+            )))
+            require(texture_seam < 300,
+                    f"radio texture has a discontinuity at the loop seam: {texture_seam}")
+            require(main.np.any(texture_samples),
+                    "radio texture layer generated silent audio")
+            require(app.audio.ambient_texture_channel is not None,
+                    "radio texture has no dedicated channel");
         prior_audio_state = app.audio.enabled
         require(app.audio.toggle() != prior_audio_state, "F8 audio toggle did not change state")
         app.audio.play("unlock")  # Must be harmless while muted.
