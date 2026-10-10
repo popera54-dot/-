@@ -2071,6 +2071,10 @@ class EscapeRoomApp:
         self.last_score_gain = 0
         self.last_cleared_stage = 0
         self.mistakes = 0
+        # Local records deliberately contain mission statistics only, never player names or camera images.
+        self.mission_records_path = DATA_DIR / "mission_records.json"
+        self.mission_records = self._load_mission_records()
+        self.mission_record_saved = False
 
         self.players: list[Player] = []
         self.player_name = ""
@@ -2131,6 +2135,111 @@ class EscapeRoomApp:
     def timer_string(self):
         s = self.remaining_seconds
         return f"{s // 3600:02d}:{(s % 3600) // 60:02d}:{s % 60:02d}"
+
+    @staticmethod
+    def _empty_mission_records():
+        return {
+            "schema_version": 1,
+            "completed_runs": 0,
+            "best_xp": 0,
+            "best_clears": 0,
+            "fewest_errors": None,
+            "best_time_left": 0,
+            "best_rank": "",
+            "last_completed": "",
+            "last_result": None,
+        }
+
+    def _load_mission_records(self):
+        """Load a privacy-light local high-score file; corrupt data safely resets to defaults."""
+        records = self._empty_mission_records()
+        try:
+            payload = json.loads(self.mission_records_path.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict):
+                return records
+            for key in ("completed_runs", "best_xp", "best_clears", "best_time_left"):
+                try:
+                    records[key] = max(0, int(payload.get(key, records[key])))
+                except (ValueError, TypeError, OverflowError):
+                    pass
+            try:
+                fewest = payload.get("fewest_errors")
+                records["fewest_errors"] = None if fewest is None else max(0, int(fewest))
+            except (ValueError, TypeError, OverflowError):
+                records["fewest_errors"] = None
+            records["best_rank"] = str(payload.get("best_rank", ""))[:48]
+            records["last_completed"] = str(payload.get("last_completed", ""))[:32]
+            last = payload.get("last_result")
+            if isinstance(last, dict):
+                clean_last = {}
+                for key in ("xp", "clears", "errors", "time_left"):
+                    try:
+                        clean_last[key] = max(0, int(last.get(key, 0)))
+                    except (ValueError, TypeError, OverflowError):
+                        clean_last[key] = 0
+                clean_last["rank"] = str(last.get("rank", ""))[:48]
+                clean_last["completed_at"] = str(last.get("completed_at", ""))[:32]
+                clean_last["new_record"] = bool(last.get("new_record", False))
+                records["last_result"] = clean_last
+        except (OSError, ValueError, TypeError):
+            # A missing or damaged score file must never keep the game from starting.
+            pass
+        return records
+
+    def record_mission(self):
+        """Persist a completed mission's aggregate stats atomically, without identifying players."""
+        try:
+            stats = self.stage_manager.later._team_debrief_stats()
+            previous = self.mission_records
+            prior_runs = max(0, int(previous.get("completed_runs", 0)))
+            xp = max(0, int(stats.get("xp", 0)))
+            clears = max(0, int(stats.get("clears", 0)))
+            errors = max(0, int(stats.get("errors", 0)))
+            time_left = max(0, int(stats.get("time_left", 0)))
+            rank = str(stats.get("rank", ""))[:48]
+            completed_at = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+            is_record = prior_runs == 0 or xp > int(previous.get("best_xp", 0))
+
+            updated = dict(previous)
+            updated["schema_version"] = 1
+            updated["completed_runs"] = prior_runs + 1
+            updated["best_xp"] = max(xp, int(previous.get("best_xp", 0)))
+            updated["best_clears"] = max(clears, int(previous.get("best_clears", 0)))
+            old_fewest = previous.get("fewest_errors")
+            updated["fewest_errors"] = errors if old_fewest is None else min(errors, int(old_fewest))
+            updated["best_time_left"] = max(time_left, int(previous.get("best_time_left", 0)))
+            updated["best_rank"] = rank if is_record else str(previous.get("best_rank", ""))
+            updated["last_completed"] = completed_at
+            updated["last_result"] = {
+                "xp": xp,
+                "clears": clears,
+                "errors": errors,
+                "time_left": time_left,
+                "rank": rank,
+                "completed_at": completed_at,
+                "new_record": is_record,
+            }
+
+            self.mission_records = updated
+            self.mission_record_saved = False
+            temporary = self.mission_records_path.with_suffix(".tmp")
+            try:
+                self.mission_records_path.parent.mkdir(parents=True, exist_ok=True)
+                temporary.write_text(
+                    json.dumps(updated, ensure_ascii=False, indent=2), encoding="utf-8"
+                )
+                temporary.replace(self.mission_records_path)
+                self.mission_record_saved = True
+            except (OSError, TypeError, ValueError):
+                try:
+                    temporary.unlink(missing_ok=True)
+                except OSError:
+                    pass
+            return self.mission_record_saved
+        except (AttributeError, ValueError, TypeError, OverflowError):
+            # High-score persistence is optional; it must not interrupt the victory sequence.
+            self.mission_record_saved = False
+            return False
 
     def operator_setup(self, surface):
         self.background.draw(surface)
