@@ -1227,6 +1227,8 @@ class Webcam:
         self.available = False
         self.last_error = None
         self.face_detector = None
+        self._read_failures = 0
+        self._next_reconnect_at = 0.0
         try:
             detector_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
             candidate = cv2.CascadeClassifier(detector_path)
@@ -1259,6 +1261,8 @@ class Webcam:
                     self.cap = candidate
                     self.available = True
                     self.last_error = None
+                    self._read_failures = 0
+                    self._next_reconnect_at = 0.0
                     return
                 if candidate is not None:
                     candidate.release()
@@ -1272,6 +1276,8 @@ class Webcam:
 
         self.cap = None
         self.available = False
+        self._read_failures = 0
+        self._next_reconnect_at = time.monotonic() + 3.0
         if not self.last_error:
             self.last_error = "No usable webcam backend opened camera index 0."
 
@@ -1279,7 +1285,11 @@ class Webcam:
         if not self.available or self.cap is None:
             self.frame = None
             self.face_box = None
-            return None
+            # Retry camera discovery sparingly so a late USB camera or reconnect can recover.
+            if time.monotonic() >= getattr(self, "_next_reconnect_at", 0.0):
+                self._open()
+            if not self.available or self.cap is None:
+                return None
         try:
             ok, frame = self.cap.read()
         except (cv2.error, AttributeError, RuntimeError) as exc:
@@ -1289,7 +1299,22 @@ class Webcam:
             # Never leave an old frame eligible for registration or presence verification.
             self.frame = None
             self.face_box = None
+            self._read_failures = getattr(self, "_read_failures", 0) + 1
+            if self._read_failures >= 3:
+                failed_cap = self.cap
+                self.cap = None
+                self.available = False
+                self._read_failures = 0
+                self._next_reconnect_at = time.monotonic() + 3.0
+                if not self.last_error:
+                    self.last_error = "Camera read failed repeatedly; reconnect scheduled."
+                try:
+                    if failed_cap is not None:
+                        failed_cap.release()
+                except Exception:
+                    pass
             return None
+        self._read_failures = 0
         frame = cv2.flip(frame, 1)
         self.frame = frame
         if detect_face:
