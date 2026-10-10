@@ -183,6 +183,23 @@ def run():
         app.resume_game()
         app.audio.stop_ambient()
 
+        # Losing OS focus should auto-pause a live mission; closing the window should exit cleanly.
+        focus_lost = getattr(pygame, "WINDOWFOCUSLOST", None)
+        if focus_lost is not None:
+            app.state = "game"
+            app.paused = False
+            app.game_started_at = time.monotonic() - 45
+            require(app.handle_window_event(pygame.event.Event(focus_lost, {})),
+                    "window-focus loss was not consumed")
+            require(app.paused, "window-focus loss did not auto-pause the mission")
+            app.pause_started_at = time.monotonic() - 1.0
+            app.resume_game()
+        app.running = True
+        require(app.handle_window_event(pygame.event.Event(pygame.QUIT, {})),
+                "window-close event was not consumed")
+        require(not app.running, "window-close event did not stop the app cleanly")
+        app.running = True
+
         # Face-lock brackets must align to a detected camera target and stay safe without one.
         class CameraProbe:
             available = True
