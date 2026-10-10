@@ -22,6 +22,15 @@ def run():
     audio_settings_temp = tempfile.TemporaryDirectory()
     original_audio_settings_path = app.audio.settings_path
     app.audio.settings_path = Path(audio_settings_temp.name) / "audio_settings.json"
+    records_temp = tempfile.TemporaryDirectory()
+    original_records_path = app.mission_records_path
+    original_records = app.mission_records
+    original_record_saved = app.mission_record_saved
+    original_mission_stats = (
+        app.mission_xp, app.stages_cleared, app.mistakes, app.timer_frozen
+    )
+    app.mission_records_path = Path(records_temp.name) / "mission_records.json"
+    app.mission_records = app._load_mission_records()
     app.state = "game"
     app.game_started_at = time.monotonic()
     app.timer_frozen = None
@@ -136,6 +145,39 @@ def run():
         require(not prefs_reader.enabled and abs(prefs_reader.master_volume - 0.63) < 0.001
                 and not prefs_reader.ambient_requested,
                 "audio preferences did not survive a save/load cycle")
+
+        # Mission records persist high scores and never store player names or camera images.
+        app.mission_xp = 875
+        app.stages_cleared = 6
+        app.mistakes = 2
+        app.timer_frozen = 1500
+        require(app.record_mission(), "first local mission record was not saved")
+        first_record = app.mission_records
+        require(first_record["completed_runs"] == 1 and first_record["best_xp"] == 875,
+                "first completed mission did not establish a local record")
+        require(first_record["last_result"]["new_record"],
+                "first completed mission did not flag a new record")
+        raw_record_text = app.mission_records_path.read_text(encoding="utf-8")
+        require("player_name" not in raw_record_text and "face" not in raw_record_text.lower(),
+                "mission record persisted identifying player or camera data")
+        app.mission_xp = 500
+        app.stages_cleared = 4
+        app.mistakes = 5
+        require(app.record_mission(), "second local mission record was not saved")
+        require(app.mission_records["completed_runs"] == 2,
+                "completed-mission counter did not increment")
+        require(app.mission_records["best_xp"] == 875,
+                "a lower score replaced the local best")
+        require(not app.mission_records["last_result"]["new_record"],
+                "a lower score incorrectly announced a new record")
+        disk_records = app._load_mission_records()
+        require(disk_records["completed_runs"] == 2 and disk_records["best_xp"] == 875,
+                "mission records failed the disk round-trip")
+
+        app.mission_xp, app.stages_cleared, app.mistakes, app.timer_frozen = original_mission_stats
+        app.mission_records = original_records
+        app.mission_record_saved = original_record_saved
+        app.mission_records_path = original_records_path
 
         # Suspense cues trigger only at their intended timer checkpoints.
         app.audio.update(300, 4)
@@ -829,6 +871,11 @@ def run():
         app.stage_manager.later._stop_mic()
         app.audio.settings_path = original_audio_settings_path
         audio_settings_temp.cleanup()
+        app.mission_records_path = original_records_path
+        app.mission_records = original_records
+        app.mission_record_saved = original_record_saved
+        app.mission_xp, app.stages_cleared, app.mistakes, app.timer_frozen = original_mission_stats
+        records_temp.cleanup()
         app.webcam.release()
         pygame.quit()
 
