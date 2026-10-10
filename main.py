@@ -2130,6 +2130,10 @@ class EscapeRoomApp:
             12: "Maccabean Energy Protocol",
         }
 
+        self.audio_test_button = Button(
+            (WIDTH - 520, 580, 390, 68), "בדיקת סאונד",
+            (65, 255, 201), "AUDIO CHECK // PREVIEW",
+        )
         self.setup_buttons = [
             Button((WIDTH * 0.18, HEIGHT * 0.86, WIDTH * 0.18, 62), "שמור הגדרות"),
             Button((WIDTH * 0.41, HEIGHT * 0.86, WIDTH * 0.20, 62), "הפעל משחק",
@@ -2137,6 +2141,23 @@ class EscapeRoomApp:
             Button((WIDTH * 0.66, HEIGHT * 0.86, WIDTH * 0.16, 62), "יציאה",
                    (255, 58, 82)),
         ]
+
+    def preview_audio(self):
+        """Give the operator a safe, single-click sound check before the team arrives."""
+        if not self.audio.available:
+            self.stage_message = "AUDIO OUTPUT UNAVAILABLE // CHECK WINDOWS SOUND DEVICE"
+            return
+        if not self.audio.enabled:
+            self.stage_message = "SOUND MUTED // PRESS F8 TO UNMUTE BEFORE TESTING"
+            return
+        played = self.audio.play("unlock")
+        if played:
+            self.stage_message = (
+                f"AUDIO CHECK // {int(self.audio.master_volume * 100)}% VOLUME"
+                "  •  F7 AMBIENCE  •  F8 MUTE"
+            )
+        else:
+            self.stage_message = "AUDIO CHECK COULD NOT PLAY // CHECK SOUND OUTPUT"
 
     def start_game(self):
         self.save_setup_config(silent=True)
@@ -2283,6 +2304,7 @@ class EscapeRoomApp:
         art = pygame.Rect(WIDTH - 520, 80, 390, 470)
         draw_intrusion_monitor(surface, art, time.monotonic() * 0.7,
                                silhouette=False, compact=True)
+        self.audio_test_button.draw(surface)
 
         # Setup fields rendered as stylized cards
         self.setup_field(surface, 70, 245, 650, "STAGE 03  //  CLUE LOCATION", self.setup_clue_location, "clue")
@@ -2607,6 +2629,10 @@ class EscapeRoomApp:
             return
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self.audio_test_button.clicked(event):
+                self.preview_audio()
+                return
+
             clue_rect = pygame.Rect(70, 245, 650, 86)
             server_rect = pygame.Rect(70, 365, 650, 86)
             if clue_rect.collidepoint(event.pos):
