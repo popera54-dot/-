@@ -866,6 +866,44 @@ def run():
         require(app.last_cleared_stage == 3 and app.last_score_gain == 203,
                 "clear feedback did not store stage and score")
 
+        # When the adaptive timer skips the next stage, the puzzle just solved still earns XP.
+        saved_transition_state = {
+            "stage": app.stage_manager.stage,
+            "game_started_at": app.game_started_at,
+            "stage_started_at": app.stage_started_at,
+            "timer_frozen": app.timer_frozen,
+            "stage_message": app.stage_message,
+            "mission_xp": app.mission_xp,
+            "stages_cleared": app.stages_cleared,
+            "last_score_gain": app.last_score_gain,
+            "last_cleared_stage": app.last_cleared_stage,
+            "audio_stage": app.audio.stage,
+        }
+        app.stage_manager.stage = 10
+        app.game_started_at = time.monotonic() - (main.TOTAL_SECONDS - 200)
+        app.timer_frozen = None
+        app.stage_message = "MEMORY MATRIX // VERIFIED"
+        app.stage_started_at = time.monotonic() - 30.0
+        app.stage_manager.goto(11)  # 200 seconds left forces the finale.
+        require(app.stage_manager.stage == 12,
+                "adaptive time manager did not preserve enough time for the finale")
+        require(app.last_cleared_stage == 10 and app.last_score_gain == 200
+                and app.mission_xp == saved_transition_state["mission_xp"] + 200,
+                "a verified stage lost its XP when the next stage was skipped")
+        require(app.stages_cleared == saved_transition_state["stages_cleared"] + 1,
+                "a verified stage skipped by the time manager was not counted")
+        app.stage_manager.later._stop_mic()
+        app.stage_manager.stage = saved_transition_state["stage"]
+        app.game_started_at = saved_transition_state["game_started_at"]
+        app.stage_started_at = saved_transition_state["stage_started_at"]
+        app.timer_frozen = saved_transition_state["timer_frozen"]
+        app.stage_message = saved_transition_state["stage_message"]
+        app.mission_xp = saved_transition_state["mission_xp"]
+        app.stages_cleared = saved_transition_state["stages_cleared"]
+        app.last_score_gain = saved_transition_state["last_score_gain"]
+        app.last_cleared_stage = saved_transition_state["last_cleared_stage"]
+        app.audio.set_stage(saved_transition_state["audio_stage"])
+
         # Repeating the same bad code should still produce a new error cue and count.
         app.stage_manager.goto(3)
         app.stage_manager.later.lifeline_active = False
