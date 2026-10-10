@@ -61,6 +61,8 @@ The webcam tries the Windows DirectShow backend first, then OpenCV's default bac
 
 ## Operator controls
 
+- `Esc` during gameplay — pause/resume the mission; the global clock and puzzle deadlines freeze while paused. Press `Enter` or `Space` to resume from the pause screen.
+- The pause panel provides clickable sound, ambience, and master-volume controls; no puzzle input is accepted underneath the overlay.
 - `F7` — toggle suspense ambience
 - `F8` — mute/unmute game audio
 - `F9` / `F10` — lower/raise master volume
