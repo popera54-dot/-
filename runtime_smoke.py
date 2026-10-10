@@ -883,12 +883,12 @@ def run():
         app.game_started_at = time.monotonic() - (main.TOTAL_SECONDS - 200)
         app.timer_frozen = None
         app.stage_message = "MEMORY MATRIX // VERIFIED"
-        app.stage_started_at = time.monotonic() - 30.0
+        app.stage_started_at = time.monotonic() - 25.0
         app.stage_manager.goto(11)  # 200 seconds left forces the finale.
         require(app.stage_manager.stage == 12,
                 "adaptive time manager did not preserve enough time for the finale")
-        require(app.last_cleared_stage == 10 and app.last_score_gain == 200
-                and app.mission_xp == saved_transition_state["mission_xp"] + 200,
+        require(app.last_cleared_stage == 10 and app.last_score_gain == 201
+                and app.mission_xp == saved_transition_state["mission_xp"] + 201,
                 "a verified stage lost its XP when the next stage was skipped")
         require(app.stages_cleared == saved_transition_state["stages_cleared"] + 1,
                 "a verified stage skipped by the time manager was not counted")
