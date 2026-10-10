@@ -1008,7 +1008,7 @@ class AudioDirector:
 
     def start_ambient(self):
         self.ambient_requested = True
-        if not self.enabled or self.ambient_channel is None or self.ambient_sound is None:
+        if self.game_paused or not self.enabled or self.ambient_channel is None or self.ambient_sound is None:
             return
         try:
             if not self.ambient_channel.get_busy():
@@ -2663,7 +2663,10 @@ class EscapeRoomApp:
         while self.running:
             dt = self.clock.tick(FPS) / 1000.0
             for event in pygame.event.get():
-                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if event.type == pygame.QUIT:
+                    self.running = False
+                    break
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and not self.paused:
                     self.audio.play("click")
                 if self.handle_secret_keys(event):
                     if not self.running:
