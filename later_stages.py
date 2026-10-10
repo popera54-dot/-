@@ -404,6 +404,8 @@ class LaterStagesController:
                     except Exception:
                         pass
                 self._mic_stream = None
+                # Record the completed mission exactly once as the victory debrief begins.
+                self.app.record_mission()
                 self.phase = "debrief"
                 self.debrief_started = now
 
@@ -966,16 +968,35 @@ class LaterStagesController:
             draw_text(surface, value, 32, (rect.centerx, rect.y + 65),
                       color, align="center", mono=True, bold=True)
 
+        record_data = getattr(self.app, "mission_records", {})
+        last_result = record_data.get("last_result") if isinstance(record_data, dict) else None
+        if not isinstance(last_result, dict):
+            last_result = {}
+        if not getattr(self.app, "mission_record_saved", False):
+            record_line = "LOCAL RECORD // SAVE UNAVAILABLE"
+            record_color = (255, 148, 116)
+        elif last_result.get("new_record", False):
+            record_line = f'NEW LOCAL RECORD  //  {stats["xp"]:05d} XP'
+            record_color = (255, 216, 123)
+        else:
+            record_line = (
+                f'LOCAL BEST  //  {int(record_data.get("best_xp", 0)):05d} XP'
+                f'    COMPLETED RUNS  //  {int(record_data.get("completed_runs", 0)):02d}'
+            )
+            record_color = (111, 235, 170)
+        draw_text(surface, record_line, 13, (cx, 620), record_color,
+                  align="center", mono=True, bold=True)
+
         elapsed = max(0.0, time.monotonic() - self.debrief_started) if self.debrief_started else 0.0
         remaining = max(0, 12 - int(elapsed))
         draw_text(surface, "TIME LEFT AT CORE CAPTURE", 10,
-                  (cx, 644), (112, 160, 145), align="center", mono=True)
+                  (cx, 651), (112, 160, 145), align="center", mono=True)
         time_str = (
             f'{stats["time_left"] // 3600:02d}:'
             f'{(stats["time_left"] % 3600) // 60:02d}:'
             f'{stats["time_left"] % 60:02d}'
         )
-        draw_text(surface, time_str, 22, (cx, 675), (230, 247, 237),
+        draw_text(surface, time_str, 22, (cx, 681), (230, 247, 237),
                   align="center", mono=True, bold=True)
         pygame.draw.rect(surface, (15, 48, 38), (cx - 330, 720, 660, 6))
         fill_w = int(660 * remaining / 12.0)
