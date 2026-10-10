@@ -136,6 +136,48 @@ def run():
                 "suspense ambience did not return after the listening puzzle")
         app.audio.set_stage(original_audio_stage)
 
+        # Pausing must freeze the mission clock and shift puzzle deadlines on resume.
+        app.state = "game"
+        app.stage_manager.goto(8)
+        app.game_started_at = time.monotonic() - 125
+        app.timer_frozen = None
+        later = app.stage_manager.later
+        later.phase = "listen"
+        later.next_beep_at = time.monotonic() + 4.0
+        remaining_before_pause = app.remaining_seconds
+        deadline_before_pause = later.next_beep_at
+        require(app.handle_secret_keys(pygame.event.Event(
+            pygame.KEYDOWN, {"key": pygame.K_ESCAPE, "mod": 0, "unicode": ""}
+        )), "Escape did not open the pause menu")
+        require(app.paused and app.audio.game_paused,
+                "pause state did not reach the app and audio mixer")
+        require(app.paused_frame is not None
+                and app.paused_frame.get_size() == main.screen.get_size(),
+                "pause menu did not preserve the current rendered frame")
+
+        # Simulate ten paused seconds without sleeping through the full test.
+        app.pause_started_at = time.monotonic() - 10.0
+        app.resume_game()
+        require(not app.paused and not app.audio.game_paused,
+                "resume did not restore active gameplay/audio")
+        require(abs(app.remaining_seconds - remaining_before_pause) <= 1,
+                "mission countdown lost time while paused")
+        require(later.next_beep_at - deadline_before_pause >= 9.9,
+                "audio-puzzle deadline did not shift across a pause")
+        require(app.handle_secret_keys(pygame.event.Event(
+            pygame.KEYDOWN, {"key": pygame.K_ESCAPE, "mod": 0, "unicode": ""}
+        )), "Escape did not open pause a second time")
+        app.pause_started_at = time.monotonic() - 2.0
+        app.resume_game()
+
+        # Audio toggles from a paused screen must keep the pause state intact.
+        app.pause_game()
+        app.audio.toggle_ambient()
+        require(app.paused and app.audio.game_paused,
+                "ambience toggle unexpectedly cleared game pause state")
+        app.resume_game()
+        app.audio.stop_ambient()
+
         # Face-lock brackets must align to a detected camera target and stay safe without one.
         class CameraProbe:
             available = True
