@@ -767,6 +767,9 @@ class AudioDirector:
         self.ambient_sound = None
         self.ambient_base_volume = 0.82
         self.ambient_channel = None
+        self.ambient_texture_sound = None
+        self.ambient_texture_base_volume = 0.34
+        self.ambient_texture_channel = None
         self.ambient_requested = True
         self.settings_path = DATA_DIR / "audio_settings.json"
         self.stage = 0
@@ -774,6 +777,7 @@ class AudioDirector:
         self.last_alarm_marker = None
         self.last_heartbeat_second = None
         self._ambient_level_cache = None
+        self._ambient_texture_level_cache = None
         self._last_played = {}
         self._load_preferences()
         self._build()
@@ -964,6 +968,45 @@ class AudioDirector:
         # Lower volume is deliberate: puzzle tones and spoken teamwork must stay clear.
         return self._wave_to_sound(wave, 0.82, gain=12500.0, stereo_width=0.11)
 
+    def _build_ambient_texture(self, sample_rate):
+        """Generate a restrained radio-static layer with a seamless eight-second loop."""
+        duration = 8.0
+        count = max(1, int(sample_rate * duration))
+        t = np.arange(count, dtype=np.float32) / float(sample_rate)
+
+        # Interpolated, deterministic noise avoids a harsh broadband hiss. Matching
+        # endpoint anchors keeps the loop seam quiet rather than producing a click.
+        rng = np.random.default_rng(2048)
+        anchor_count = 901
+        anchors = rng.normal(0.0, 1.0, anchor_count).astype(np.float32)
+        anchors[-1] = anchors[0]
+        noise = np.interp(
+            np.arange(count, dtype=np.float32),
+            np.linspace(0, count - 1, anchor_count, dtype=np.float32),
+            anchors,
+        ).astype(np.float32)
+        noise -= float(np.mean(noise))
+        noise_peak = max(1e-6, float(np.max(np.abs(noise))))
+        noise /= noise_peak
+
+        # Slow swells plus narrow, soft transmission chirps: texture, not a loud alarm.
+        swell = 0.22 + 0.78 * np.power(
+            0.5 + 0.5 * np.sin(2.0 * np.pi * 0.25 * t + np.pi / 2.0), 4
+        )
+        wave = noise * swell * 0.042
+        for start, frequency, glide in (
+            (0.72, 780.0, -125.0),
+            (2.72, 610.0, 90.0),
+            (4.72, 860.0, -180.0),
+            (6.72, 540.0, 115.0),
+        ):
+            self._add_note(wave, t, start, 0.15, frequency, 0.032,
+                           decay=12.0, glide=glide)
+
+        # Keep the loop mathematically closed at its output samples.
+        wave[-1] = wave[0]
+        return self._wave_to_sound(wave, 0.42, gain=15000.0, stereo_width=0.04)
+
     def _build(self):
         try:
             mixer = pygame.mixer.get_init()
@@ -979,13 +1022,17 @@ class AudioDirector:
                     self.sounds[name] = sound
                     self.effect_base_volumes[name] = self.EFFECTS[name][1]
             self.ambient_sound = self._build_ambient(sample_rate)
+            self.ambient_texture_sound = self._build_ambient_texture(sample_rate)
             self.ambient_channel = pygame.mixer.Channel(15)
+            self.ambient_texture_channel = pygame.mixer.Channel(14)
             self.available = bool(self.sounds)
             self._apply_volume()
         except (pygame.error, ValueError, TypeError, RuntimeError):
             self.sounds = {}
             self.ambient_sound = None
             self.ambient_channel = None
+            self.ambient_texture_sound = None
+            self.ambient_texture_channel = None
             self.available = False
 
     def play(self, name):
@@ -1013,23 +1060,31 @@ class AudioDirector:
 
     def start_ambient(self):
         self.ambient_requested = True
-        if self.game_paused or not self.enabled or self.ambient_channel is None or self.ambient_sound is None:
+        if self.game_paused or not self.enabled:
             return
         try:
-            if not self.ambient_channel.get_busy():
-                self.ambient_channel.play(self.ambient_sound, loops=-1, fade_ms=900)
-            self._set_ambient_level()
+            if self.ambient_channel is not None and self.ambient_sound is not None:
+                if not self.ambient_channel.get_busy():
+                    self.ambient_channel.play(self.ambient_sound, loops=-1, fade_ms=900)
+            if self.ambient_texture_channel is not None and self.ambient_texture_sound is not None:
+                if not self.ambient_texture_channel.get_busy():
+                    self.ambient_texture_channel.play(
+                        self.ambient_texture_sound, loops=-1, fade_ms=1200
+                    )
+            self._set_ambient_level(force=True)
         except pygame.error:
             pass
 
     def stop_ambient(self):
         self.ambient_requested = False
-        if self.ambient_channel is None:
-            return
-        try:
-            self.ambient_channel.fadeout(650) if self.enabled else self.ambient_channel.stop()
-        except pygame.error:
-            pass
+        channels = (self.ambient_channel, self.ambient_texture_channel)
+        for channel in channels:
+            if channel is None:
+                continue
+            try:
+                channel.fadeout(650) if self.enabled else channel.stop()
+            except pygame.error:
+                pass
 
     def _ambient_target_level(self, remaining_seconds=None):
         # Duck the ambience during the frequency puzzle so the clue tones stay crystal clear.
@@ -1049,17 +1104,38 @@ class AudioDirector:
                 level = max(level, 0.34)
         return level
 
+    def _ambient_texture_target_level(self, remaining_seconds=None):
+        # The radio bed gets quieter during the listening cipher and gently busier near timeout.
+        if self.stage == 8:
+            return 0.025
+        level = 0.13 if self.stage in (9, 11) else 0.105
+        if remaining_seconds is not None:
+            remaining = max(0, int(remaining_seconds))
+            if remaining <= 30:
+                level = max(level, 0.20)
+            elif remaining <= 60:
+                level = max(level, 0.17)
+            elif remaining <= 180:
+                level = max(level, 0.145)
+        return level
+
     def _set_ambient_level(self, remaining_seconds=None, *, force=False):
-        if self.ambient_channel is None:
-            return
         level = self._ambient_target_level(remaining_seconds)
-        if not force and level == self._ambient_level_cache:
-            return
-        try:
-            self.ambient_channel.set_volume(level)
-            self._ambient_level_cache = level
-        except pygame.error:
-            pass
+        texture_level = self._ambient_texture_target_level(remaining_seconds)
+        if self.ambient_channel is not None and (force or level != self._ambient_level_cache):
+            try:
+                self.ambient_channel.set_volume(level)
+                self._ambient_level_cache = level
+            except pygame.error:
+                pass
+        if self.ambient_texture_channel is not None and (
+            force or texture_level != self._ambient_texture_level_cache
+        ):
+            try:
+                self.ambient_texture_channel.set_volume(texture_level)
+                self._ambient_texture_level_cache = texture_level
+            except pygame.error:
+                pass
 
     def _apply_volume(self):
         """Apply the master level to synthesized effects and ambient audio."""
@@ -1074,9 +1150,16 @@ class AudioDirector:
                 self.ambient_sound.set_volume(self.ambient_base_volume * self.master_volume)
             except pygame.error:
                 pass
-        if self.ambient_channel is not None:
-            self._ambient_level_cache = None
-            self._set_ambient_level(force=True)
+        if self.ambient_texture_sound is not None:
+            try:
+                self.ambient_texture_sound.set_volume(
+                    self.ambient_texture_base_volume * self.master_volume
+                )
+            except pygame.error:
+                pass
+        self._ambient_level_cache = None
+        self._ambient_texture_level_cache = None
+        self._set_ambient_level(force=True)
         if self.app is not None:
             later = getattr(getattr(self.app, "stage_manager", None), "later", None)
             if later is not None:
@@ -1212,11 +1295,12 @@ class AudioDirector:
 
     def stop(self):
         self.stop_ambient()
-        if self.ambient_channel is not None:
-            try:
-                self.ambient_channel.stop()
-            except pygame.error:
-                pass
+        for channel in (self.ambient_channel, self.ambient_texture_channel):
+            if channel is not None:
+                try:
+                    channel.stop()
+                except pygame.error:
+                    pass
 
 
 class Webcam:
