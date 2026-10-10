@@ -116,6 +116,22 @@ def run():
                     "radio texture layer generated silent audio")
             require(app.audio.ambient_texture_channel is not None,
                     "radio texture has no dedicated channel");
+        # Operator sound preview calls one distinct cue and reports the selected master level.
+        old_available, old_enabled, old_play = app.audio.available, app.audio.enabled, app.audio.play
+        preview_calls = []
+        app.audio.available = True
+        app.audio.enabled = True
+        app.audio.play = lambda name: preview_calls.append(name) or True
+        app.handle_setup_event(pygame.event.Event(
+            pygame.MOUSEBUTTONDOWN,
+            {"button": 1, "pos": app.audio_test_button.rect.center},
+        ))
+        require(preview_calls == ["unlock"],
+                "operator sound preview did not play the unlock cue")
+        require("AUDIO CHECK" in app.stage_message,
+                "operator sound preview did not report its result")
+        app.audio.available, app.audio.enabled, app.audio.play = old_available, old_enabled, old_play
+
         prior_audio_state = app.audio.enabled
         require(app.audio.toggle() != prior_audio_state, "F8 audio toggle did not change state")
         app.audio.play("unlock")  # Must be harmless while muted.
