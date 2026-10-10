@@ -52,6 +52,21 @@ def run():
         require(main._glow_layer(12, (50, 220, 180), 13) is main._glow_layer(12, (50, 220, 180), 13),
                 "glow surface was not cached between frames")
 
+        # The persistent breach HUD reflects actual clears and the current team score.
+        stage_before_hud = app.stage_manager.stage
+        xp_before_hud, clears_before_hud = app.mission_xp, app.stages_cleared
+        app.stage_manager.stage = 6
+        app.mission_xp, app.stages_cleared = 1234, 3
+        hud_probe = pygame.Surface((main.WIDTH, main.HEIGHT))
+        hud_probe.fill((1, 2, 3))
+        app.stage_manager.draw_stage_chip(hud_probe)
+        require(hud_probe.get_at((42, 80))[:3] == (55, 222, 143),
+                "breach HUD did not render completed clear markers")
+        require(hud_probe.get_at((111, 80))[:3] != (1, 2, 3),
+                "breach HUD did not render the active marker")
+        app.stage_manager.stage = stage_before_hud
+        app.mission_xp, app.stages_cleared = xp_before_hud, clears_before_hud
+
         # Fixed-time terminal imagery must be stable, not flicker to random glyphs each frame.
         background_probe = main.CinematicBackground()
         background_probe.time = 4.25
