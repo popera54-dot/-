@@ -17,13 +17,13 @@ A cinematic, full-screen Hanukkah escape-room game for Windows, built with Pytho
 - 11 — 180-second Quantum Current Lock; X=64, Y=200, Z=66
 - 12 — Webcam celebration finale with motion/voice energy, original generated synth music, a 5-to-1 victory countdown, and a mission debrief with team rank, XP, clears, and errors
 
-The final debrief stays on screen for up to 12 seconds so the team can review the result; press Enter or Space to close it sooner. The celebration music continues under the debrief and the microphone is stopped as soon as the movement finale ends.
+The final debrief stays on screen for up to 12 seconds so the team can review the result; press Enter or Space to close it sooner. The celebration music continues under the debrief and the microphone is stopped as soon as the movement finale ends. The debrief also highlights a new local XP record, or shows the best score and completed-run count. Records are stored in `data/mission_records.json` and contain aggregate mission statistics only—no player names, face templates, or audio recordings.
 
 The operator console lets you edit the Stage 3 clue location, Stage 7 clue location, and as many Stage 4 puzzle-piece locations as needed. Settings are stored locally in `data/operator_config.json`.
 
 The 10-minute Trivia Lifeline can appear while the family is in stages 5–11; every correct answer adds 60 seconds. The adaptive time manager can skip intermediate stages when there is no longer enough time to complete the remaining challenges and finale.
 
-Successful puzzle clears award team XP, with a speed bonus for quick solves. Rejected submissions increment the team error count and trigger a one-shot error cue; the finale shows total XP, cleared stages, errors, and a team rank based on time remaining and mistakes.
+Successful puzzle clears award team XP, with a speed bonus for quick solves. Rejected submissions increment the team error count and trigger a one-shot error cue; the finale shows total XP, cleared stages, errors, and a team rank based on time remaining and mistakes. A compact breach tracker keeps the nine core clears and team XP visible during play.
 
 ## Portable Windows build
 
@@ -51,7 +51,8 @@ The webcam tries the Windows DirectShow backend first, then OpenCV's default bac
 
 ## Sound design
 
-- The game synthesizes layered sound effects and a low-volume ambient drone; no extra audio files are required.
+- The game synthesizes layered sound effects, a low-volume ambient drone, and a subtle radio-transmission texture; no extra audio files are required.
+- The ambience is a seamless two-layer loop. It automatically ducks during the Stage 8 listening puzzle and grows slightly more urgent as the mission timer runs down; the radio texture has its own low-level mix so it never overpowers puzzle tones.
 - Correct solutions, wrong inputs, stage unlocks, the opening intrusion, the last 10 seconds, and the final victory use distinct audio cues. Stage 8 keeps its four-note auditory puzzle.
 - `F7` toggles the low-volume suspense drone independently, `F8` mutes/restores all game audio, and `F9` / `F10` lower or raise master volume. The current sound level and ambience state appear in the HUD.
 - The soundtrack remains restrained during the main mission, gets subtly louder as the deadline approaches, and adds a low double-heartbeat cue in the final minute before the last-ten-second beeps.
