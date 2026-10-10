@@ -759,6 +759,7 @@ class AudioDirector:
     def __init__(self):
         self.app = None
         self.enabled = True
+        self.game_paused = False
         self.available = False
         self.master_volume = 0.78
         self.sounds = {}
@@ -1169,10 +1170,28 @@ class AudioDirector:
                                 later.music_channel.play(later.music_sound, loops=-1)
                 else:
                     pygame.mixer.pause()
+                # Changing sound settings while the mission is paused must never unpause playback.
+                if self.game_paused:
+                    pygame.mixer.pause()
         except (pygame.error, AttributeError, RuntimeError):
             pass
         self._save_preferences()
         return self.enabled
+
+    def set_paused(self, paused):
+        """Pause/resume every mixer channel while respecting master mute."""
+        self.game_paused = bool(paused)
+        if not pygame.mixer.get_init():
+            return
+        try:
+            if self.game_paused or not self.enabled:
+                pygame.mixer.pause()
+            else:
+                pygame.mixer.unpause()
+                if self.ambient_requested and self.stage < 12:
+                    self.start_ambient()
+        except pygame.error:
+            pass
 
     def draw_status(self, surface, draw_text, width, height):
         if not self.available:
@@ -1927,6 +1946,10 @@ class EscapeRoomApp:
         self.audio.bind_app(self)
 
         self.state = "setup"
+        self.paused = False
+        self.pause_started_at = None
+        self.paused_frame = None
+        self.paused_remaining = None
         self.stage_manager = StageManager(self)
         self.stage_started_at = time.monotonic()
         self.mission_xp = 0
@@ -2117,6 +2140,163 @@ class EscapeRoomApp:
         add_rect = pygame.Rect(panel.right - 92, panel.y + 12, 74, 29)
         rounded_panel(surface, add_rect, (7, 29, 31), (55, 221, 180), 8, 1)
         draw_text(surface, "+ חלק", 11, add_rect.center, (91, 255, 211), align="center", bold=True)
+    def _pause_layout(self):
+        panel = pygame.Rect(WIDTH // 2 - 390, HEIGHT // 2 - 270, 780, 540)
+        return {
+            "panel": panel,
+            "resume": pygame.Rect(panel.x + 52, panel.y + 205, panel.w - 104, 60),
+            "sound": pygame.Rect(panel.x + 52, panel.y + 285, 320, 54),
+            "ambience": pygame.Rect(panel.x + 408, panel.y + 285, 320, 54),
+            "volume_down": pygame.Rect(panel.x + 52, panel.y + 360, 145, 50),
+            "volume_up": pygame.Rect(panel.right - 197, panel.y + 360, 145, 50),
+        }
+
+    def pause_game(self):
+        """Freeze the mission without losing the current puzzle or its remaining time."""
+        if self.state != "game" or self.paused:
+            return False
+        self.paused_remaining = self.remaining_seconds
+        self.paused_frame = screen.copy()
+        self.pause_started_at = time.monotonic()
+        self.paused = True
+        self.audio.set_paused(True)
+        return True
+
+    @staticmethod
+    def _shift_timestamp(obj, attr, delta):
+        if obj is None or not hasattr(obj, attr):
+            return
+        value = getattr(obj, attr)
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+            setattr(obj, attr, value + delta)
+
+    def resume_game(self):
+        """Shift wall-clock deadlines by the pause duration so puzzles truly stop."""
+        if not self.paused:
+            return False
+        now = time.monotonic()
+        elapsed = max(0.0, now - (self.pause_started_at or now))
+
+        self.game_started_at = (self.game_started_at + elapsed
+                                if self.game_started_at is not None else None)
+        self.stage_started_at += elapsed
+        self._shift_timestamp(self.stage_manager, "transition_started_at", elapsed)
+
+        # These are monotonic deadlines. Shift them together so no puzzle times out
+        # or skips audio notes after a long pause.
+        later = self.stage_manager.later
+        for attr in (
+            "phase_started", "next_beep_at", "wrong_until", "memory_started",
+            "memory_retry_at", "quantum_started", "quantum_done_at", "dance_started",
+            "victory_started", "countdown_started", "debrief_started",
+            "lifeline_feedback_until",
+        ):
+            self._shift_timestamp(later, attr, elapsed)
+
+        stage5 = self.stage_manager.stage5
+        self._shift_timestamp(stage5, "phase_started", elapsed)
+        for task in stage5.tasks:
+            for attr in (
+                "started", "deadline", "preview_until", "feedback_until",
+                "flash_until", "hide_until", "reveal_until", "wrong_until",
+                "next_flash_at", "animation_started", "expires_at",
+            ):
+                self._shift_timestamp(task, attr, elapsed)
+
+        # Do not shift Stage 4's started_at: it uses the simulation clock, which
+        # is stopped while paused. The finale's frozen mission timer is unchanged.
+        self.paused = False
+        self.pause_started_at = None
+        self.paused_frame = None
+        self.paused_remaining = None
+        self.audio.set_paused(False)
+        return True
+
+    def handle_pause_event(self, event):
+        if not self.paused:
+            return False
+        if event.type == pygame.KEYDOWN:
+            if event.key in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_SPACE):
+                self.resume_game()
+                return True
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            layout = self._pause_layout()
+            if layout["resume"].collidepoint(event.pos):
+                self.resume_game()
+                return True
+            if layout["sound"].collidepoint(event.pos):
+                enabled = self.audio.toggle()
+                self.stage_message = "SOUND DESIGN ACTIVE" if enabled else "SOUND MUTED"
+                return True
+            if layout["ambience"].collidepoint(event.pos):
+                enabled = self.audio.toggle_ambient()
+                self.stage_message = "AMBIENT DRONE ENABLED" if enabled else "AMBIENT DRONE DISABLED"
+                return True
+            if layout["volume_down"].collidepoint(event.pos):
+                level = self.audio.adjust_volume(-0.08)
+                self.stage_message = f"SOUND LEVEL // {int(level * 100)}%"
+                return True
+            if layout["volume_up"].collidepoint(event.pos):
+                level = self.audio.adjust_volume(0.08)
+                self.stage_message = f"SOUND LEVEL // {int(level * 100)}%"
+                return True
+        return True
+
+    def draw_pause_overlay(self, surface):
+        layout = self._pause_layout()
+        panel = layout["panel"]
+        veil = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        veil.fill((0, 4, 7, 188))
+        surface.blit(veil, (0, 0))
+        pulse = 0.5 + 0.5 * math.sin(time.monotonic() * 2.6)
+        rounded_panel(surface, panel, (2, 10, 14, 252), (42, int(170 + 65 * pulse), 128), 24, 2)
+        pygame.draw.line(surface, (255, 67, 79),
+                         (panel.x + 26, panel.y + 20), (panel.x + 142, panel.y + 20), 2)
+        pygame.draw.line(surface, (64, 255, 177),
+                         (panel.right - 142, panel.bottom - 20), (panel.right - 26, panel.bottom - 20), 2)
+        draw_text(surface, "MISSION CONTROL // SIMULATION FROZEN", 12,
+                  (panel.centerx, panel.y + 37), (75, 227, 160),
+                  align="center", mono=True, bold=True)
+        draw_text(surface, "המשימה בהשהיה", 42, (panel.centerx, panel.y + 94),
+                  (239, 250, 247), align="center", bold=True)
+        label = self.stage_names.get(self.stage_manager.stage, "MISSION SETUP")
+        draw_text(surface, fit_text(label.upper(), 16, panel.w - 100, mono=True, bold=True),
+                  16, (panel.centerx, panel.y + 139), (255, 183, 103),
+                  align="center", mono=True, bold=True)
+        remaining = self.paused_remaining if self.paused_remaining is not None else self.remaining_seconds
+        draw_text(surface, f"TIMER FROZEN  //  {remaining // 60:02d}:{remaining % 60:02d} REMAINING",
+                  13, (panel.centerx, panel.y + 172), (128, 166, 166),
+                  align="center", mono=True)
+
+        self._draw_pause_button(surface, layout["resume"], "המשך במשימה  /  RESUME", (63, 255, 178), primary=True)
+        sound_label = "SOUND: ON  [F8]" if self.audio.enabled else "SOUND: OFF  [F8]"
+        ambient_label = "AMBIENCE: ON  [F7]" if self.audio.ambient_requested else "AMBIENCE: OFF  [F7]"
+        self._draw_pause_button(surface, layout["sound"], sound_label,
+                                (66, 218, 166) if self.audio.enabled else (255, 99, 109))
+        self._draw_pause_button(surface, layout["ambience"], ambient_label,
+                                (66, 218, 166) if self.audio.ambient_requested else (111, 133, 138))
+        self._draw_pause_button(surface, layout["volume_down"], "−  VOLUME [F9]", (100, 190, 175))
+        self._draw_pause_button(surface, layout["volume_up"], "+  VOLUME [F10]", (100, 190, 175))
+        draw_text(surface, f"MASTER VOLUME  //  {int(self.audio.master_volume * 100)}%",
+                  12, (panel.centerx, panel.y + 385), (179, 208, 204),
+                  align="center", mono=True, bold=True)
+        draw_text(surface, "ESC / ENTER / SPACE  RESUME     •     CTRL+ALT+SHIFT+ESC  EMERGENCY EXIT",
+                  10, (panel.centerx, panel.bottom - 36), (103, 136, 141),
+                  align="center", mono=True)
+
+    @staticmethod
+    def _draw_pause_button(surface, rect, label, accent, primary=False):
+        hover = rect.collidepoint(pygame.mouse.get_pos())
+        pulse = 0.5 + 0.5 * math.sin(time.monotonic() * 7.5)
+        border = tuple(clamp(c + (26 if hover else 0), 0, 255) for c in accent)
+        rounded_panel(surface, rect, (5, 24, 27) if (hover or primary) else (4, 14, 18),
+                      border, 12, 2 if (hover or primary) else 1)
+        if hover:
+            x = rect.x + 8 + int((time.monotonic() * 185) % max(1, rect.w - 16))
+            pygame.draw.line(surface, border, (x, rect.y + 9), (x, rect.bottom - 9), 2)
+        draw_text(surface, label, 17 if rect.w > 200 else 13,
+                  rect.center, (237, 250, 246), align="center", bold=True)
+
     def draw_global_hud(self, surface):
         if not self.game_started_at or self.stage_manager.stage in (9, 12):
             return
@@ -2381,9 +2561,22 @@ class EscapeRoomApp:
                 self.mistakes += 1
 
     def handle_secret_keys(self, event):
-        """Return True when a privileged operator shortcut consumed the key event."""
+        """Consume global audio, pause, and operator shortcuts before stage input."""
         if event.type != pygame.KEYDOWN:
             return False
+        mods = getattr(event, "mod", pygame.key.get_mods())
+
+        # Emergency exit must take priority over the ordinary Escape-to-pause control.
+        exit_pressed = (
+            (mods & pygame.KMOD_CTRL)
+            and (mods & pygame.KMOD_ALT)
+            and (mods & pygame.KMOD_SHIFT)
+            and event.key == pygame.K_ESCAPE
+        )
+        if exit_pressed:
+            self.running = False
+            return True
+
         if event.key == pygame.K_F8:
             enabled = self.audio.toggle()
             self.stage_message = "SOUND DESIGN ACTIVE" if enabled else "SOUND MUTED"
@@ -2400,29 +2593,28 @@ class EscapeRoomApp:
             level = self.audio.adjust_volume(0.08)
             self.stage_message = f"SOUND LEVEL // {int(level * 100)}%"
             return True
-        # Use the modifiers captured on this specific event, not a separate keyboard poll.
-        mods = getattr(event, "mod", pygame.key.get_mods())
+
+        if event.key == pygame.K_ESCAPE and self.state == "game":
+            if self.paused:
+                self.resume_game()
+            else:
+                self.pause_game()
+            return True
+
         skip_pressed = (
             (mods & pygame.KMOD_CTRL)
             and (mods & pygame.KMOD_SHIFT)
             and event.key == pygame.K_RIGHT
         )
-        exit_pressed = (
-            (mods & pygame.KMOD_CTRL)
-            and (mods & pygame.KMOD_ALT)
-            and (mods & pygame.KMOD_SHIFT)
-            and event.key == pygame.K_ESCAPE
-        )
-        if exit_pressed:
-            self.running = False
-            return True
-        if skip_pressed and self.state == "game":
+        if skip_pressed and self.state == "game" and not self.paused:
             if self.stage_manager.stage < 12:
                 self.stage_manager.goto(self.stage_manager.stage + 1)
             return True
         return False
 
     def update(self, dt):
+        if self.paused:
+            return
         self.background.update(dt)
         if self.state == "game" and self.stage_manager.stage == 2:
             self.webcam.read()
@@ -2442,6 +2634,15 @@ class EscapeRoomApp:
             self.stage_manager.later.lifeline_update()
 
     def draw(self):
+        if self.paused:
+            if self.paused_frame is not None:
+                screen.blit(self.paused_frame, (0, 0))
+            else:
+                screen.fill((1, 5, 8))
+            self.draw_pause_overlay(screen)
+            self.audio.draw_status(screen, draw_text, WIDTH, HEIGHT)
+            pygame.display.flip()
+            return
         if self.state == "setup":
             self.operator_setup(screen)
         else:
@@ -2470,6 +2671,8 @@ class EscapeRoomApp:
                     continue
                 if self.state == "setup":
                     self.handle_setup_event(event)
+                elif self.paused:
+                    self.handle_pause_event(event)
                 else:
                     self.handle_game_event(event)
 
