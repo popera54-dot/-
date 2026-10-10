@@ -55,7 +55,7 @@ def run():
                 "cinematic background changed at a fixed time value")
 
         # Test distinct procedural cues, non-silent buffers, global mute, and ambient lifecycle.
-        expected_sounds = {"click", "confirm", "puzzle", "unlock", "transition",
+        expected_sounds = {"click", "keypress", "confirm", "puzzle", "unlock", "transition",
                            "error", "intrusion", "tick", "urgent_tick", "heartbeat", "victory"}
         if app.audio.available:
             require(expected_sounds.issubset(set(app.audio.sounds)),
@@ -151,6 +151,9 @@ def run():
         )), "Escape did not open the pause menu")
         require(app.paused and app.audio.game_paused,
                 "pause state did not reach the app and audio mixer")
+        app.draw_pause_overlay(main.screen)
+        require(pygame.image.tostring(main.screen, "RGB") != bytes(main.WIDTH * main.HEIGHT * 3),
+                "pause overlay rendered an empty screen")
         require(app.paused_frame is not None
                 and app.paused_frame.get_size() == main.screen.get_size(),
                 "pause menu did not preserve the current rendered frame")
