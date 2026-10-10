@@ -155,7 +155,9 @@ def run():
                 and app.paused_frame.get_size() == main.screen.get_size(),
                 "pause menu did not preserve the current rendered frame")
 
-        # Simulate ten paused seconds without sleeping through the full test.
+        # Simulate ten paused seconds without sleeping: allow the underlying wall-clock
+        # to advance, then verify resume shifts the mission start forward by the same amount.
+        app.game_started_at -= 10.0
         app.pause_started_at = time.monotonic() - 10.0
         app.resume_game()
         require(not app.paused and not app.audio.game_paused,
