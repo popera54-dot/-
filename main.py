@@ -2593,6 +2593,18 @@ class EscapeRoomApp:
                 self.audio.play("error")
                 self.mistakes += 1
 
+    def handle_window_event(self, event):
+        """Handle OS-level window events before puzzle controllers see them."""
+        if event.type == pygame.QUIT:
+            self.running = False
+            return True
+        focus_lost = getattr(pygame, "WINDOWFOCUSLOST", None)
+        if (focus_lost is not None and event.type == focus_lost
+                and self.state == "game" and not self.paused):
+            self.pause_game()
+            return True
+        return False
+
     def handle_secret_keys(self, event):
         """Consume global audio, pause, and operator shortcuts before stage input."""
         if event.type != pygame.KEYDOWN:
@@ -2696,9 +2708,10 @@ class EscapeRoomApp:
         while self.running:
             dt = self.clock.tick(FPS) / 1000.0
             for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    self.running = False
-                    break
+                if self.handle_window_event(event):
+                    if not self.running:
+                        break
+                    continue
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and not self.paused:
                     self.audio.play("click")
                 if self.handle_secret_keys(event):
