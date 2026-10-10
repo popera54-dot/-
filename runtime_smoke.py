@@ -235,13 +235,72 @@ def run():
         require(fallback_backend.released and not camera_probe.available,
                 "webcam release left a camera handle active")
 
+        # A webcam connected after launch should recover without restarting the game.
+        class WorkingCameraProbe(CameraBackendProbe):
+            def read(self):
+                return True, main.np.zeros((120, 160, 3), dtype=main.np.uint8)
+
+        delayed_backends = [CameraBackendProbe(False), WorkingCameraProbe(True)]
+        reconnect_camera = main.Webcam.__new__(main.Webcam)
+        reconnect_camera.cap = None
+        reconnect_camera.frame = None
+        reconnect_camera.face_box = None
+        reconnect_camera.available = False
+        reconnect_camera.last_error = None
+        reconnect_camera.face_detector = None
+        reconnect_camera._read_failures = 0
+        reconnect_camera._next_reconnect_at = time.monotonic() - 1.0
+        try:
+            def fake_reconnect(index, *args):
+                require(index == 0, "webcam reconnect changed the camera index")
+                return delayed_backends.pop(0)
+            main.cv2.VideoCapture = fake_reconnect
+            recovered_frame = reconnect_camera.read(detect_face=False)
+        finally:
+            main.cv2.VideoCapture = original_capture
+        require(recovered_frame is not None and reconnect_camera.available,
+                "delayed webcam connection did not recover on its scheduled retry")
+        reconnect_camera.release()
+
+        # Repeated failures close the dead handle and schedule a throttled retry.
+        class DeadReadCamera:
+            def __init__(self):
+                self.released = False
+
+            def read(self):
+                return False, None
+
+            def release(self):
+                self.released = True
+
+        dead_camera = main.Webcam.__new__(main.Webcam)
+        dead_camera.cap = DeadReadCamera()
+        dead_handle = dead_camera.cap
+        dead_camera.frame = main.np.zeros((30, 30, 3), dtype=main.np.uint8)
+        dead_camera.face_box = (2, 2, 20, 20)
+        dead_camera.available = True
+        dead_camera.last_error = None
+        dead_camera.face_detector = None
+        dead_camera._read_failures = 0
+        dead_camera._next_reconnect_at = time.monotonic() + 20.0
+        for _ in range(3):
+            require(dead_camera.read() is None, "dead camera unexpectedly returned a frame")
+        require(not dead_camera.available and dead_camera.cap is None and dead_handle.released,
+                "repeated camera failures did not release the dead handle")
+        require(dead_camera.frame is None and dead_camera.face_box is None,
+                "repeated camera failures left stale face data")
+        require(dead_camera._next_reconnect_at > time.monotonic(),
+                "camera retry was not throttled after repeated failures")
+        dead_camera.release()
+
         # A disconnected or failed camera read must never leave an old face eligible for registration.
         class StaleFrameCamera:
             def read(self):
                 return False, None
         webcam = app.webcam
         prior_camera_state = (
-            webcam.cap, webcam.available, webcam.frame, webcam.face_box, webcam.last_error
+            webcam.cap, webcam.available, webcam.frame, webcam.face_box, webcam.last_error,
+            getattr(webcam, "_read_failures", 0), getattr(webcam, "_next_reconnect_at", 0.0)
         )
         try:
             webcam.cap = StaleFrameCamera()
@@ -253,8 +312,9 @@ def run():
             require(webcam.capture_face() is None,
                     "stale webcam frame remained eligible for face registration")
         finally:
-            (webcam.cap, webcam.available, webcam.frame,
-             webcam.face_box, webcam.last_error) = prior_camera_state
+            (webcam.cap, webcam.available, webcam.frame, webcam.face_box,
+             webcam.last_error, webcam._read_failures,
+             webcam._next_reconnect_at) = prior_camera_state
 
         # Registration must fail safely when OpenCV cannot write a face template,
         # and must register only after a real image has been saved and read back.
