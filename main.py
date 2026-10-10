@@ -1739,7 +1739,7 @@ class StageManager:
             "COLLAPSED", "CLEARED", "CRACKED", "SECURED", "DECRYPTED",
             "ACCEPTED", "VERIFIED", "STABLE"
         )
-        if (previous_stage >= 3 and stage == previous_stage + 1
+        if (previous_stage >= 3 and requested_stage == previous_stage + 1
                 and any(marker in completion_message for marker in clear_markers)):
             elapsed = max(0.0, time.monotonic() - self.app.stage_started_at)
             speed_bonus = int(60 * max(0.0, 1.0 - min(elapsed, 180.0) / 180.0))
