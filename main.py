@@ -1772,6 +1772,26 @@ class StageManager:
         draw_text(surface, self.app.stage_names.get(self.stage, "UNKNOWN").upper(),
                   13, (40, 54), (110, 140, 147), mono=True)
 
+        # A compact breach tracker makes verified progress and team XP visible during play.
+        clears = max(0, min(9, int(getattr(self.app, "stages_cleared", 0))))
+        segment_w, segment_gap = 18, 5
+        for index in range(9):
+            rr = pygame.Rect(40 + index * (segment_w + segment_gap), 78,
+                             segment_w, 5)
+            if index < clears:
+                color = (55, 222, 143)
+            elif index == clears:
+                pulse = 0.5 + 0.5 * math.sin(time.monotonic() * 4.8)
+                color = (int(160 + 90 * pulse), int(114 + 60 * pulse), 73)
+            else:
+                color = (23, 47, 47)
+            pygame.draw.rect(surface, color, rr)
+        draw_text(
+            surface,
+            f"BREACHES {clears:02d}/09  //  TEAM XP {int(getattr(self.app, 'mission_xp', 0)):05d}",
+            9, (40, 97), (104, 176, 151), mono=True, bold=True,
+        )
+
     def draw(self, surface):
         if self.stage == 1:
             self.draw_stage_1(surface)
