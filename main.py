@@ -748,7 +748,7 @@ class AudioDirector:
 
     EFFECTS = {
         # Quiet tactile UI click; success and unlock cues remain the loudest short effects.
-        "click": (0.060, 0.065), "confirm": (0.31, 0.22),
+        "click": (0.060, 0.065), "keypress": (0.045, 0.045), "confirm": (0.31, 0.22),
         "puzzle": (0.78, 0.28), "unlock": (1.04, 0.30),
         "transition": (0.34, 0.18), "error": (0.36, 0.20),
         "intrusion": (1.32, 0.28), "tick": (0.095, 0.14),
@@ -863,6 +863,10 @@ class AudioDirector:
         if name == "click":
             self._add_note(wave, t, 0.0, 0.047, 1120, 0.19, decay=74, glide=-680)
             wave += np.sin(2 * np.pi * 3150 * t) * np.exp(-t * 145) * 0.018
+        elif name == "keypress":
+            # A low-level glassy tick for typed codes, throttled to avoid a typewriter effect.
+            self._add_note(wave, t, 0.0, 0.031, 1740, 0.12, decay=102, glide=-520)
+            wave += np.sin(2 * np.pi * 2480 * t) * np.exp(-t * 180) * 0.009
         elif name == "confirm":
             for start, freq, amp in ((0.0, 659.25, 0.23), (0.060, 880.0, 0.18), (0.13, 1046.5, 0.16)):
                 self._add_note(wave, t, start, 0.22, freq, amp, decay=6.5)
@@ -993,6 +997,7 @@ class AudioDirector:
         now = time.monotonic()
         cooldown = (
             0.28 if name == "error"
+            else 0.045 if name == "keypress"
             else 0.12 if name == "click"
             else 0.10 if name in ("confirm", "tick")
             else 0.0
@@ -2536,6 +2541,9 @@ class EscapeRoomApp:
 
         stage_before = self.stage_manager.stage
         errors_before = self._rejection_signature()
+        if (event.type == pygame.KEYDOWN and getattr(event, "unicode", "")
+                and event.unicode.isprintable() and not event.unicode.isspace()):
+            self.audio.play("keypress")
         if stage_before == 2:
             self.handle_roster_event(event)
         elif stage_before == 3:
