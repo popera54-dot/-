@@ -46,7 +46,7 @@ python -m pip install -r requirements.txt
 python main.py
 ```
 
-The webcam tries the Windows DirectShow backend first, then OpenCV's default backend. A failed camera read clears the previous frame so stale images cannot be reused for registration or presence checks. The finale uses the webcam to estimate movement and optionally opens the microphone through `sounddevice`. Audio input is measured live only to drive the energy meter; the game does not save audio recordings.
+The webcam tries the Windows DirectShow backend first, then OpenCV's default backend. A failed camera read clears the previous frame so stale images cannot be reused for registration or presence checks. If the camera is connected late or repeatedly fails, the game releases the dead handle and retries discovery at a throttled interval instead of requiring a restart. The finale uses the webcam to estimate movement and optionally opens the microphone through `sounddevice`. Audio input is measured live only to drive the energy meter; the game does not save audio recordings.
 
 
 ## Sound design
