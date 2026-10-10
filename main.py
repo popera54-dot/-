@@ -1570,6 +1570,7 @@ class Stage5Controller:
             surface,
             danger=1.0 if self.phase == "verify" else 0.0,
         )
+        self.app.stage_manager.draw_stage_chip(surface)
         player = self.current_player
         task = self.current_task
 
