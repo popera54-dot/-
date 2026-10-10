@@ -2131,7 +2131,7 @@ class EscapeRoomApp:
         }
 
         self.audio_test_button = Button(
-            (WIDTH - 520, 580, 390, 68), "בדיקת סאונד",
+            (WIDTH - 520, 570, 390, 88), "בדיקת סאונד",
             (65, 255, 201), "AUDIO CHECK // PREVIEW",
         )
         self.setup_buttons = [
