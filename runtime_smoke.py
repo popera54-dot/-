@@ -486,35 +486,55 @@ def run():
 
         # The server clue advances only through its visible button, not arbitrary clicks.
         server_stage = app.stage_manager.stage7
+        original_server_stage = app.stage_manager.stage
+        original_server_state = app.state
+        original_server_players = app.players
+        server_mistakes_before = app.mistakes
+        server_rejections_before = server_stage.rejection_count
+        app.state = "game"
+        app.stage_manager.stage = 7
+        app.players = []  # Exercise the no-camera path through the real app event dispatcher.
         server_stage.start()
-        server_stage.handle(
-            pygame.event.Event(pygame.MOUSEBUTTONDOWN, {"button": 1, "pos": (30, 30)}),
-            pygame, main.WIDTH, main.HEIGHT
-        )
+        app.stage_message = ""
+        app.handle_game_event(pygame.event.Event(
+            pygame.MOUSEBUTTONDOWN, {"button": 1, "pos": (30, 30)}
+        ))
         require(server_stage.phase == "clue", "random click bypassed the stage 7 physical clue")
         server_start = (main.WIDTH // 2, 643)
-        server_stage.handle(
-            pygame.event.Event(pygame.MOUSEBUTTONDOWN, {"button": 1, "pos": server_start}),
-            pygame, main.WIDTH, main.HEIGHT
-        )
+        app.handle_game_event(pygame.event.Event(
+            pygame.MOUSEBUTTONDOWN, {"button": 1, "pos": server_start}
+        ))
         require(server_stage.phase == "select",
                 "visible stage 7 start button did not continue when no face roster was required")
         wrong_node = (main.WIDTH // 2 - 420 + 90, 390 + 75)
-        server_stage.handle(
-            pygame.event.Event(pygame.MOUSEBUTTONDOWN, {"button": 1, "pos": wrong_node}),
-            pygame, main.WIDTH, main.HEIGHT
-        )
+        app.handle_game_event(pygame.event.Event(
+            pygame.MOUSEBUTTONDOWN, {"button": 1, "pos": wrong_node}
+        ))
         require(server_stage.phase == "clue", "wrong server node did not restart stage 7")
-        server_stage.handle(
-            pygame.event.Event(pygame.MOUSEBUTTONDOWN, {"button": 1, "pos": server_start}),
-            pygame, main.WIDTH, main.HEIGHT
-        )
+        require(app.mistakes == server_mistakes_before + 1,
+                "first rejected server node did not increment mission errors")
+        app.handle_game_event(pygame.event.Event(
+            pygame.MOUSEBUTTONDOWN, {"button": 1, "pos": server_start}
+        ))
+        app.handle_game_event(pygame.event.Event(
+            pygame.MOUSEBUTTONDOWN, {"button": 1, "pos": wrong_node}
+        ))
+        require(server_stage.rejection_count == server_rejections_before + 2
+                and app.mistakes == server_mistakes_before + 2,
+                "repeating the same wrong server node was not counted twice")
+        app.handle_game_event(pygame.event.Event(
+            pygame.MOUSEBUTTONDOWN, {"button": 1, "pos": server_start}
+        ))
         purple_node = (main.WIDTH // 2 - 420 + 90, 580 + 75)
-        server_stage.handle(
-            pygame.event.Event(pygame.MOUSEBUTTONDOWN, {"button": 1, "pos": purple_node}),
-            pygame, main.WIDTH, main.HEIGHT
-        )
+        app.handle_game_event(pygame.event.Event(
+            pygame.MOUSEBUTTONDOWN, {"button": 1, "pos": purple_node}
+        ))
         require(app.stage_manager.stage == 8, "correct purple server node did not unlock stage 8")
+        require(app.mistakes == server_mistakes_before + 2,
+                "correct server node unexpectedly incremented mission errors")
+        app.state = original_server_state
+        app.players = original_server_players
+        # Keep the successful stage transition to 8, as the rest of the test sequence expects it.
 
         # All ten registered players, including long Hebrew names, should fit above buttons.
         app.players = [
