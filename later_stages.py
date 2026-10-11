@@ -38,6 +38,7 @@ class LaterStagesController:
         self.phase = ""
         self.phase_started = time.monotonic()
         self.error = ""
+        self.rejection_count = 0
         self.rotation_angle = 180.0
         self.rotation_scale = 1.0
         self.rotation_transition = False
@@ -474,6 +475,7 @@ class LaterStagesController:
                     else:
                         self.code_input = ""
                         self.error = "קוד שגוי — הקשיבו שוב לדפוס הצלילים."
+                        self.rejection_count += 1
 
     def _handle_stage9(self, event, width, height):
         if event.type != pygame.MOUSEBUTTONDOWN or event.button != 1:
@@ -498,6 +500,7 @@ class LaterStagesController:
                     self.next_number_index = 0
                     self.wrong_until = time.monotonic() + 1.0
                     self.error = "שגיאה — הרצף אופס. התחילו שוב מהמספר הקטן ביותר."
+                    self.rejection_count += 1
                 return
 
     def _map_rotated_pointer(self, pos, width, height):
@@ -543,6 +546,7 @@ class LaterStagesController:
             self.app.stage_manager.goto(11)
             return
         self.memory_error = "לא מדויק. התמונה תחזור ל־30 שניות נוספות."
+        self.rejection_count += 1
         self.phase = "retry_notice"
         self.memory_retry_at = time.monotonic() + 2.0
 
@@ -579,6 +583,7 @@ class LaterStagesController:
             self.quantum_values = ["", "", ""]
             self.quantum_active_field = 0
             self.quantum_error = "זרם לא יציב — בדקו את שלוש המבחנות."
+            self.rejection_count += 1
 
     def draw(self, surface, draw_text, rounded_panel, glow_circle, pygame, width, height, t):
         if self.stage == 9:
