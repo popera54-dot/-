@@ -2775,30 +2775,39 @@ class EscapeRoomApp:
                         self.cipher_digits.clear()
 
     def _rejection_signature(self):
-        """Read puzzle error text so newly rejected inputs receive one clear audio cue."""
+        """Return error-only text plus monotonic rejection counters for repeated identical misses."""
         signature = {}
         keywords = (
             "DENIED", "REJECTED", "FAILURE", "WRONG", "ERROR", "TIMEOUT",
-            "שגיאה", "שגוי", "לא מדויק", "לא ניתן", "תחילה פתרו", "חייב להגיע"
+            "MISMATCH", "RESET", "BLOCKED", "MISREAD", "LOST", "UNSTABLE",
+            "שגיאה", "שגוי", "לא מדויק", "לא ניתן", "תחילה פתרו",
+            "חייב להגיע", "לא יציב", "אופס",
         )
-        message = str(self.stage_message or "")
-        signature["stage_message"] = message if any(
-            word in message.upper() or word in message for word in keywords
-        ) else ""
+
+        def error_text(value):
+            message = str(value or "")
+            return message if any(
+                word in message.upper() or word in message for word in keywords
+            ) else ""
+
+        signature["stage_message"] = error_text(self.stage_message)
+        # Registration/validation messages are setup feedback, not mission mistakes.
+        # Stage 5 tasks count misses directly through TaskBase.report_miss so success
+        # messages such as Trivia's ACCESS GRANTED can never inflate the error total.
         sources = [
-            ("roster", self, ("roster_error",)),
-            ("stage4", self.stage_manager.stage4, ("error",)),
-            ("stage7", self.stage_manager.stage7, ("error",)),
-            ("later", self.stage_manager.later, ("error", "memory_error", "quantum_error")),
+            ("stage4", self.stage_manager.stage4, ("error", "rejection_count")),
+            ("stage7", self.stage_manager.stage7, ("rejection_count",)),
+            ("later", self.stage_manager.later,
+             ("error", "memory_error", "quantum_error", "rejection_count")),
         ]
-        task = self.stage_manager.stage5.current_task
-        if task is not None:
-            sources.append(("stage5_task", task, ("error", "feedback", "message")))
         for prefix, obj, attrs in sources:
             for attr in attrs:
                 value = getattr(obj, attr, "")
+                key = f"{prefix}.{attr}"
                 if isinstance(value, str):
-                    signature[f"{prefix}.{attr}"] = value
+                    signature[key] = error_text(value)
+                elif attr == "rejection_count" and isinstance(value, int) and not isinstance(value, bool):
+                    signature[key] = value
         return signature
 
     def handle_game_event(self, event):
