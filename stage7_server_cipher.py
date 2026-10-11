@@ -23,6 +23,7 @@ class Stage7Controller:
         self.phase = "clue"
         self.verify_index = 0
         self.verify_score = 0.0
+        self.rejection_count = 0
 
     @property
     def current_player(self):
@@ -89,6 +90,7 @@ class Stage7Controller:
                             self.app.stage_manager.goto(8)
                         else:
                             self.app.stage_message = "SERVER FAILURE // WRONG NODE // RESTART PROTOCOL"
+                            self.rejection_count += 1
                             self.phase = "clue"
                             self.verify_index = 0
                             self.verify_score = 0.0
