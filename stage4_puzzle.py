@@ -35,6 +35,7 @@ class Stage4Controller:
         self.route_input_rect = None
         self.route_verify_button = None
         self.error = ""
+        self.rejection_count = 0
         self.generate_puzzle()
 
     def start(self):
@@ -444,6 +445,7 @@ class Stage4Controller:
         else:
             self.route_verified = False
             self.error = "המסלול הנכון חייב להגיע ליציאה 15."
+            self.rejection_count += 1
             self.route_answer = ""
 
     def handle(self, event, pygame, width, height):
@@ -478,6 +480,7 @@ class Stage4Controller:
             if self.complete_button and self.complete_button.collidepoint(event.pos):
                 if not self.route_verified:
                     self.error = "תחילה פתרו את המסלול והקלידו 15."
+                    self.rejection_count += 1
                     return
                 if not self.puzzle_confirmed:
                     self.puzzle_confirmed = True
