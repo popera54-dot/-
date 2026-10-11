@@ -237,6 +237,19 @@ def run():
         later.next_beep_at = time.monotonic() + 4.0
         remaining_before_pause = app.remaining_seconds
         deadline_before_pause = later.next_beep_at
+        # Two task-specific deadlines must freeze too: memory mismatch reveal lock and
+        # the next brief letter flash should not expire while the operator pauses.
+        stage5_for_pause = app.stage_manager.stage5
+        old_stage5_tasks = stage5_for_pause.tasks
+        pause_memory = CyberMemoryTask()
+        pause_memory.lock_until = time.monotonic() + 0.65
+        pause_letter = MissingLetterTask()
+        pause_letter.next_swap = time.monotonic() + 1.0
+        pause_letter.flash_until = time.monotonic() + 0.16
+        stage5_for_pause.tasks = [pause_memory, pause_letter]
+        lock_before_pause = pause_memory.lock_until
+        swap_before_pause = pause_letter.next_swap
+        flash_before_pause = pause_letter.flash_until
         require(app.handle_secret_keys(pygame.event.Event(
             pygame.KEYDOWN, {"key": pygame.K_ESCAPE, "mod": 0, "unicode": ""}
         )), "Escape did not open the pause menu")
@@ -260,6 +273,13 @@ def run():
                 "mission countdown lost time while paused")
         require(later.next_beep_at - deadline_before_pause >= 9.9,
                 "audio-puzzle deadline did not shift across a pause")
+        require(pause_memory.lock_until - lock_before_pause >= 9.9,
+                "memory mismatch lock expired during pause")
+        require(pause_letter.next_swap - swap_before_pause >= 9.9,
+                "missing-letter flash schedule expired during pause")
+        require(pause_letter.flash_until - flash_before_pause >= 9.9,
+                "active letter flash was lost during pause")
+        stage5_for_pause.tasks = old_stage5_tasks
         require(app.handle_secret_keys(pygame.event.Event(
             pygame.KEYDOWN, {"key": pygame.K_ESCAPE, "mod": 0, "unicode": ""}
         )), "Escape did not open pause a second time")
