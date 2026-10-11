@@ -699,6 +699,52 @@ def run():
         require(color_feedback.cursor == 0 and color_feedback.feedback_text == "SEQUENCE RESET",
                 "color sequence did not provide feedback after a wrong color")
 
+        # Repeating the same failed task must increment the mission error count once
+        # per attempt, while a valid solve must never be counted as a mistake.
+        stage5_controller = app.stage_manager.stage5
+        saved_stage = app.stage_manager.stage
+        saved_state = app.state
+        saved_task_list = stage5_controller.tasks
+        saved_task_phase = stage5_controller.phase
+        saved_task_index = stage5_controller.current_task_index
+        saved_assigned_player = stage5_controller.assigned_player
+        saved_lifeline_active = app.stage_manager.later.lifeline_active
+        saved_mistakes = app.mistakes
+        try:
+            app.state = "game"
+            app.stage_manager.stage = 5
+            app.stage_manager.later.lifeline_active = False
+            decrypt_task = WordDecryptTask()
+            decrypt_task.bind_app(app)
+            stage5_controller.tasks = [decrypt_task]
+            stage5_controller.current_task_index = 0
+            stage5_controller.assigned_player = 0
+            stage5_controller.phase = "task"
+            rejected_submit = pygame.event.Event(
+                pygame.KEYDOWN, {"key": pygame.K_RETURN, "unicode": "\\r", "mod": 0}
+            )
+            decrypt_task.input_text = "not the solution"
+            app.handle_game_event(rejected_submit)
+            require(app.mistakes == saved_mistakes + 1,
+                    "first failed Stage 5 word did not count as one mistake")
+            decrypt_task.input_text = "not the solution"
+            app.handle_game_event(rejected_submit)
+            require(app.mistakes == saved_mistakes + 2,
+                    "repeated identical Stage 5 failure was not counted again")
+            decrypt_task.input_text = decrypt_task.answer
+            app.handle_game_event(rejected_submit)
+            require(app.mistakes == saved_mistakes + 2 and decrypt_task.done,
+                    "a successful Stage 5 solution was counted as a mistake")
+        finally:
+            app.mistakes = saved_mistakes
+            app.state = saved_state
+            app.stage_manager.stage = saved_stage
+            stage5_controller.tasks = saved_task_list
+            stage5_controller.phase = saved_task_phase
+            stage5_controller.current_task_index = saved_task_index
+            stage5_controller.assigned_player = saved_assigned_player
+            app.stage_manager.later.lifeline_active = saved_lifeline_active
+
         # The four-branch preview must restart when the player actually receives the task.
         dreidel_task = DreidelSaysTask()
         dreidel_task.preview_until = time.monotonic() - 1
