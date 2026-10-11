@@ -989,7 +989,7 @@ class LaterStagesController:
 
         elapsed = max(0.0, time.monotonic() - self.debrief_started) if self.debrief_started else 0.0
         remaining = max(0, 12 - int(elapsed))
-        draw_text(surface, "TIME LEFT AT CORE CAPTURE", 10,
+        draw_text(surface, "TIME LEFT WHEN FINAL PROTOCOL STARTED", 10,
                   (cx, 651), (112, 160, 145), align="center", mono=True)
         time_str = (
             f'{stats["time_left"] // 3600:02d}:'
