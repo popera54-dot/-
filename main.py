@@ -2464,7 +2464,8 @@ class EscapeRoomApp:
         for task in stage5.tasks:
             for attr in (
                 "started", "deadline", "preview_until", "feedback_until",
-                "flash_until", "hide_until", "reveal_until", "wrong_until",
+                "flash_until", "next_swap", "lock_until",
+                "hide_until", "reveal_until", "wrong_until",
                 "next_flash_at", "animation_started", "expires_at",
             ):
                 self._shift_timestamp(task, attr, elapsed)
