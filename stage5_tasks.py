@@ -48,7 +48,10 @@ class TaskBase:
         self._report_feedback(text, True, sound)
 
     def report_miss(self, text="SIGNAL REJECTED", sound="error"):
+        """Register one real failed action once, even when its message repeats."""
         self._report_feedback(text, False, sound)
+        if self.app is not None:
+            self.app.mistakes = max(0, int(getattr(self.app, "mistakes", 0))) + 1
 
     def update(self, dt):
         pass
@@ -512,6 +515,7 @@ class TriviaTask(TaskBase):
             self.timeout_count += 1
             self.feedback = "הזמן נגמר — ניסיון חדש מתחיל עכשיו."
             self.feedback_until = now + 1.8
+            self.report_miss("TIMEOUT // NEW ATTEMPT", sound="urgent_tick")
             self.deadline = now + 30
 
     def handle(self, event, pygame, width, height):
@@ -534,8 +538,7 @@ class TriviaTask(TaskBase):
                         self.deadline = time.monotonic() + 30
                         self.feedback = "תשובה שגויה — הטיימר אופס."
                         self.feedback_until = time.monotonic() + 1.5
-                        # The app's shared rejection detector already plays the error cue for Trivia.
-                        self.report_miss("ANSWER REJECTED", sound=None)
+                        self.report_miss("ANSWER REJECTED")
         return self.result()
 
     def draw(self, surface, draw_text, rounded_panel, glow_circle, pygame, width, height, t):
